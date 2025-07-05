@@ -49,6 +49,47 @@ static int gost_has(const void *keydata, int selection)
     return ok;
 }
 
+static int gost_validate(const void *keydata, int selection, int checktype)
+{
+    const GOST_KEYMGMT_CTX *ctx = keydata;
+
+    if (ctx->ec == NULL)
+        return 0;
+    return EC_KEY_check_key(ctx->ec);
+}
+
+static int gost_match(const void *keydata1, const void *keydata2, int selection)
+{
+    const GOST_KEYMGMT_CTX *ctx1 = keydata1;
+    const GOST_KEYMGMT_CTX *ctx2 = keydata2;
+    const EC_KEY *ec1 = ctx1->ec;
+    const EC_KEY *ec2 = ctx2->ec;
+    int ok = 1;
+
+    if ((selection & OSSL_KEYMGMT_SELECT_PUBLIC_KEY) != 0) {
+        const EC_POINT *p1 = EC_KEY_get0_public_key(ec1);
+        const EC_POINT *p2 = EC_KEY_get0_public_key(ec2);
+        const EC_GROUP *g1 = EC_KEY_get0_group(ec1);
+
+        if (p1 == NULL || p2 == NULL || g1 == NULL ||
+            EC_KEY_get0_group(ec2) == NULL)
+            return 0;
+        if (EC_POINT_cmp(g1, p1, p2, NULL) != 0)
+            ok = 0;
+    }
+    if ((selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0) {
+        const BIGNUM *k1 = EC_KEY_get0_private_key(ec1);
+        const BIGNUM *k2 = EC_KEY_get0_private_key(ec2);
+
+        if (k1 == NULL || k2 == NULL)
+            return 0;
+        if (BN_cmp(k1, k2) != 0)
+            ok = 0;
+    }
+    return ok;
+}
+
+
 static const OSSL_PARAM keymgmt_params[] = {
     OSSL_PARAM_utf8_string(OSSL_PKEY_PARAM_GROUP_NAME, NULL, 0),
     OSSL_PARAM_int(OSSL_PKEY_PARAM_BITS, NULL),
@@ -111,6 +152,7 @@ static void *gost_gen(void *genctx, OSSL_CALLBACK *osslcb, void *cbarg)
         EC_KEY_free(ec);
         return NULL;
     }
+    gctx->ec = ec;
     /* genctx will be cleaned up by the framework */
     return gctx;
 }
@@ -124,6 +166,8 @@ static void *gost_load(const void *reference, size_t reference_sz)
         return NULL;
     if (reference_sz == sizeof(ec))
         memcpy(&ec, reference, sizeof(ec));
+    if (ec != NULL)
+        EC_KEY_up_ref(ec);
     ctx->ec = ec;
     if (ec != NULL) {
         const EC_GROUP *grp = EC_KEY_get0_group(ec);
@@ -278,6 +322,9 @@ static int gost_import(void *keydata, int selection, const OSSL_PARAM params[])
     }
     if (EC_KEY_get0_group(ec) != NULL)
         ctx->param_nid = EC_GROUP_get_curve_name(EC_KEY_get0_group(ec));
+    if ((selection & (OSSL_KEYMGMT_SELECT_PRIVATE_KEY | OSSL_KEYMGMT_SELECT_PUBLIC_KEY)) != 0
+        && !EC_KEY_check_key(ec))
+        return 0;
     return 1;
 }
 
@@ -314,12 +361,14 @@ static const OSSL_DISPATCH gost2001_keymgmt_functions[] = {
     { OSSL_FUNC_KEYMGMT_LOAD, (fptr_t)gost_load },
     { OSSL_FUNC_KEYMGMT_GET_PARAMS, (fptr_t)gost_get_params },
     { OSSL_FUNC_KEYMGMT_GETTABLE_PARAMS, (fptr_t)gost_gettable_params },
-    { OSSL_FUNC_KEYMGMT_HAS, (fptr_t)gost_has },
-    { OSSL_FUNC_KEYMGMT_QUERY_OPERATION_NAME, (fptr_t)gost_query_operation_name },
     { OSSL_FUNC_KEYMGMT_EXPORT, (fptr_t)gost_export },
     { OSSL_FUNC_KEYMGMT_EXPORT_TYPES, (fptr_t)gost_imexport_types },
     { OSSL_FUNC_KEYMGMT_IMPORT, (fptr_t)gost_import },
     { OSSL_FUNC_KEYMGMT_IMPORT_TYPES, (fptr_t)gost_imexport_types },
+    { OSSL_FUNC_KEYMGMT_HAS, (fptr_t)gost_has },
+    { OSSL_FUNC_KEYMGMT_VALIDATE, (fptr_t)gost_validate },
+    { OSSL_FUNC_KEYMGMT_MATCH, (fptr_t)gost_match },
+    { OSSL_FUNC_KEYMGMT_QUERY_OPERATION_NAME, (fptr_t)gost_query_operation_name },
     { 0, NULL }
 };
 
@@ -332,12 +381,14 @@ static const OSSL_DISPATCH gost2012_256_keymgmt_functions[] = {
     { OSSL_FUNC_KEYMGMT_LOAD, (fptr_t)gost_load },
     { OSSL_FUNC_KEYMGMT_GET_PARAMS, (fptr_t)gost_get_params },
     { OSSL_FUNC_KEYMGMT_GETTABLE_PARAMS, (fptr_t)gost_gettable_params },
-    { OSSL_FUNC_KEYMGMT_HAS, (fptr_t)gost_has },
-    { OSSL_FUNC_KEYMGMT_QUERY_OPERATION_NAME, (fptr_t)gost_query_operation_name },
     { OSSL_FUNC_KEYMGMT_EXPORT, (fptr_t)gost_export },
     { OSSL_FUNC_KEYMGMT_EXPORT_TYPES, (fptr_t)gost_imexport_types },
     { OSSL_FUNC_KEYMGMT_IMPORT, (fptr_t)gost_import },
     { OSSL_FUNC_KEYMGMT_IMPORT_TYPES, (fptr_t)gost_imexport_types },
+    { OSSL_FUNC_KEYMGMT_HAS, (fptr_t)gost_has },
+    { OSSL_FUNC_KEYMGMT_VALIDATE, (fptr_t)gost_validate },
+    { OSSL_FUNC_KEYMGMT_MATCH, (fptr_t)gost_match },
+    { OSSL_FUNC_KEYMGMT_QUERY_OPERATION_NAME, (fptr_t)gost_query_operation_name },
     { 0, NULL }
 };
 
@@ -350,12 +401,14 @@ static const OSSL_DISPATCH gost2012_512_keymgmt_functions[] = {
     { OSSL_FUNC_KEYMGMT_LOAD, (fptr_t)gost_load },
     { OSSL_FUNC_KEYMGMT_GET_PARAMS, (fptr_t)gost_get_params },
     { OSSL_FUNC_KEYMGMT_GETTABLE_PARAMS, (fptr_t)gost_gettable_params },
-    { OSSL_FUNC_KEYMGMT_HAS, (fptr_t)gost_has },
-    { OSSL_FUNC_KEYMGMT_QUERY_OPERATION_NAME, (fptr_t)gost_query_operation_name },
     { OSSL_FUNC_KEYMGMT_EXPORT, (fptr_t)gost_export },
     { OSSL_FUNC_KEYMGMT_EXPORT_TYPES, (fptr_t)gost_imexport_types },
     { OSSL_FUNC_KEYMGMT_IMPORT, (fptr_t)gost_import },
     { OSSL_FUNC_KEYMGMT_IMPORT_TYPES, (fptr_t)gost_imexport_types },
+    { OSSL_FUNC_KEYMGMT_HAS, (fptr_t)gost_has },
+    { OSSL_FUNC_KEYMGMT_VALIDATE, (fptr_t)gost_validate },
+    { OSSL_FUNC_KEYMGMT_MATCH, (fptr_t)gost_match },
+    { OSSL_FUNC_KEYMGMT_QUERY_OPERATION_NAME, (fptr_t)gost_query_operation_name },
     { 0, NULL }
 };
 
