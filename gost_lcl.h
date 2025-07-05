@@ -406,6 +406,8 @@ extern GOST_digest magma_ctracpkm_omac_digest;
 extern const OSSL_ALGORITHM GOST_prov_digests[];
 void GOST_prov_deinit_digests(void);
 extern const OSSL_ALGORITHM GOST_prov_keymgmts[];
+extern const OSSL_ALGORITHM GOST_prov_encoders[];
+
 
 typedef struct gost_keymgmt_ctx_st {
     void *provctx;
