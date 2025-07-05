@@ -94,6 +94,8 @@ static const OSSL_ALGORITHM *gost_operation(void *vprovctx,
         return GOST_prov_digests;
     case OSSL_OP_MAC:
         return GOST_prov_macs;
+    case OSSL_OP_KEYMGMT:
+        return GOST_prov_keymgmts;
     }
     return NULL;
 }
