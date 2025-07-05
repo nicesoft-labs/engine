@@ -7,6 +7,11 @@
 #include "gost_lcl.h"
 #include "gost_asn1.h"
 
+#ifndef OSSL_ENCODER_PARAM_OUTPUT_TYPE
+# define OSSL_ENCODER_PARAM_OUTPUT_TYPE "output-type"
+#endif
+
+
 /*
  * Very small and simplified ENCODER implementation.  This is
  * currently just enough to export a GOST_KEYMGMT_CTX EC_KEY as
@@ -81,7 +86,6 @@ static int encoder_encode(void *vctx, OSSL_CORE_BIO *cout, const void *obj,
     if ((pkey = EVP_PKEY_new()) == NULL)
         goto end;
     if (!EVP_PKEY_set_type(pkey, alg_nid)
-        || !EVP_PKEY_set1_engine(pkey, ctx->provctx->e)
         || !EVP_PKEY_set1_EC_KEY(pkey, gctx->ec))
         goto end;
 
@@ -111,18 +115,29 @@ end:
 }
 
 /* Currently not implemented */
-static int encoder_export_object(void *vctx, const void *objref, size_t objref_sz,
-                                 OSSL_CALLBACK *export_cb, void *export_cbarg)
-{
-    /* TODO: implement export if needed */
-    return 0;
-}
+static int encoder_set_ctx_params(void *vctx, const OSSL_PARAM params[])
 
-static void *encoder_import_object(void *vctx, int selection,
-                                   const OSSL_PARAM params[])
-{
-    /* TODO: implement import if needed */
-    return NULL;
+    GOST_ENCODER_CTX *ctx = vctx;
+    const OSSL_PARAM *p;
+
+    if (params == NULL)
+        return 1;
+
+    p = OSSL_PARAM_locate_const(params, OSSL_ENCODER_PARAM_OUTPUT_TYPE);
+    if (p != NULL) {
+        const char *t = NULL;
+
+        if (!OSSL_PARAM_get_utf8_string_ptr(p, &t))
+            return 0;
+        if (strcmp(t, "PEM") == 0)
+            ctx->ispem = 1;
+        else if (strcmp(t, "DER") == 0)
+            ctx->ispem = 0;
+        else
+            return 0;
+    }
+
+    return 1;
 }
 
 static int encoder_does_selection(void *provctx, int selection)
@@ -133,16 +148,47 @@ static int encoder_does_selection(void *provctx, int selection)
     return 0;
 }
 
-static const OSSL_PARAM *encoder_parameters(void *provctx)
+static int encoder_get_params(OSSL_PARAM params[])
 {
-    static const OSSL_PARAM params[] = {
-        OSSL_PARAM_END
-    };
-    return params;
+    /* No parameters to return */
+    (void)params;
+    return 1;
 }
 
-/* A placeholder to silence unused function warnings. */
+typedef void (*fptr_t)(void);
 
-void gost_prov_encoder_stub(void)
-{
-}
+#define MAKE_ENCODER_FUNCTIONS(alg, fmt, ispemflag)                        \
+    static void *alg##_##fmt##_encoder_newctx(void *provctx)               \
+    {                                                                      \
+        GOST_ENCODER_CTX *ctx = encoder_newctx(provctx);                   \
+        if (ctx != NULL)                                                   \
+            ctx->ispem = ispemflag;                                        \
+        return ctx;                                                        \
+    }                                                                      \
+    static const OSSL_DISPATCH alg##_##fmt##_encoder_functions[] = {       \
+        { OSSL_FUNC_ENCODER_NEWCTX, (fptr_t)alg##_##fmt##_encoder_newctx },\
+        { OSSL_FUNC_ENCODER_FREECTX, (fptr_t)encoder_freectx },             \
+        { OSSL_FUNC_ENCODER_ENCODE, (fptr_t)encoder_encode },              \
+        { OSSL_FUNC_ENCODER_SET_CTX_PARAMS, (fptr_t)encoder_set_ctx_params },\
+        { OSSL_FUNC_ENCODER_DOES_SELECTION, (fptr_t)encoder_does_selection },\
+        { OSSL_FUNC_ENCODER_GET_PARAMS, (fptr_t)encoder_get_params },       \
+        { 0, NULL }                                                        \
+    }
+
+MAKE_ENCODER_FUNCTIONS(gost2001, der, 0);
+MAKE_ENCODER_FUNCTIONS(gost2001, pem, 1);
+MAKE_ENCODER_FUNCTIONS(gost2012_256, der, 0);
+MAKE_ENCODER_FUNCTIONS(gost2012_256, pem, 1);
+MAKE_ENCODER_FUNCTIONS(gost2012_512, der, 0);
+MAKE_ENCODER_FUNCTIONS(gost2012_512, pem, 1);
+
+const OSSL_ALGORITHM GOST_prov_encoders[] = {
+    { "gost2001:DER", "provider=gostprov", gost2001_der_encoder_functions },
+    { "gost2001:PEM", "provider=gostprov", gost2001_pem_encoder_functions },
+    { "gost2012_256:DER", "provider=gostprov", gost2012_256_der_encoder_functions },
+    { "gost2012_256:PEM", "provider=gostprov", gost2012_256_pem_encoder_functions },
+    { "gost2012_512:DER", "provider=gostprov", gost2012_512_der_encoder_functions },
+    { "gost2012_512:PEM", "provider=gostprov", gost2012_512_pem_encoder_functions },
+    { NULL, NULL, NULL }
+};
+
