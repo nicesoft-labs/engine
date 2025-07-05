@@ -405,6 +405,8 @@ extern GOST_digest magma_ctracpkm_omac_digest;
 /* Provider implementation data */
 extern const OSSL_ALGORITHM GOST_prov_digests[];
 void GOST_prov_deinit_digests(void);
+extern const OSSL_ALGORITHM GOST_prov_keymgmts[];
+
 
 /* job to initialize a missing NID */
 struct gost_nid_job {
