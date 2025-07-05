@@ -209,6 +209,7 @@ set(GOST_PROV_SOURCE_FILES
         gost_prov_cipher.c
         gost_prov_digest.c
         gost_prov_mac.c
+        gost_prov_keymgmt.c
         )
 
 set(TEST_ENVIRONMENT_COMMON
@@ -321,6 +322,12 @@ add_test(NAME mgm-with-provider COMMAND test_mgm)
 set_tests_properties(mgm-with-provider
   PROPERTIES ENVIRONMENT "${TEST_ENVIRONMENT_PROVIDER}")
 
+add_executable(test_keymgmt test_keymgmt.c)
+target_link_libraries(test_keymgmt OpenSSL::Crypto)
+add_test(NAME keymgmt-with-provider COMMAND test_keymgmt)
+set_tests_properties(keymgmt-with-provider
+  PROPERTIES ENVIRONMENT "${TEST_ENVIRONMENT_PROVIDER}")
+
 if(NOT SKIP_PERL_TESTS)
     execute_process(COMMAND perl -MTest2::V0 -e ""
        ERROR_QUIET RESULT_VARIABLE MISSING_TEST2_V0)
@@ -354,6 +361,7 @@ set(BINARY_TESTS_TARGETS
         test_sign
         test_context
         test_keyexpimp
+        test_keymgmt
         test_gost89
         test_tls
         test_mgm
