@@ -54,10 +54,15 @@ int main(void)
     fprintf(stderr, "imported key\n");
     EVP_PKEY_CTX_free(ctx);
     ctx = NULL;
+    ctx = EVP_PKEY_CTX_new_from_pkey(NULL, key2, NULL);
+    T(ctx != NULL);
+    T(EVP_PKEY_check(ctx) > 0);
+    EVP_PKEY_CTX_free(ctx);
+    ctx = NULL;
     OSSL_PARAM_free(params);
     params = NULL;
 
-    /* Equality check not implemented in provider, skip for now */
+    T(EVP_PKEY_eq(key, key2));
     T(EVP_PKEY_get_utf8_string_param(key2, OSSL_PKEY_PARAM_GROUP_NAME,
                                      group, sizeof(group), &gsz));
     fprintf(stderr, "group=%s\n", group);
