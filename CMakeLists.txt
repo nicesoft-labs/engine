@@ -162,6 +162,7 @@ set(GOST_CORE_SOURCE_FILES
         gost_crypt.c
         gost_keywrap.c
         gost_keywrap.h
+        gost_asn1.h
         gost_md.c
         gost_md2012.c
         gost_omac.c
