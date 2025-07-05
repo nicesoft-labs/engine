@@ -5,7 +5,6 @@
 #include <openssl/evp.h>
 #include "gost_prov.h"
 #include "gost_lcl.h"
-#include "gost_asn1.h"
 
 #ifndef OSSL_ENCODER_PARAM_OUTPUT_TYPE
 # define OSSL_ENCODER_PARAM_OUTPUT_TYPE "output-type"
@@ -114,7 +113,6 @@ end:
     return ret > 0;
 }
 
-/* Currently not implemented */
 static int encoder_set_ctx_params(void *vctx, const OSSL_PARAM params[])
 
     GOST_ENCODER_CTX *ctx = vctx;
@@ -156,6 +154,10 @@ static int encoder_get_params(OSSL_PARAM params[])
 }
 
 typedef void (*fptr_t)(void);
+/*
+ * This macro declares DER and PEM variants for each GOST encoder.
+ * The format is selected via ispemflag or set_ctx_params.
+ */
 
 #define MAKE_ENCODER_FUNCTIONS(alg, fmt, ispemflag)                        \
     static void *alg##_##fmt##_encoder_newctx(void *provctx)               \
