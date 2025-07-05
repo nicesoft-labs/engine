@@ -8,22 +8,26 @@
 #include "gost_prov.h"
 #include "gost_lcl.h"
 
-/* Key data is simply an EC_KEY */
+/* Key management context */
 
-static void *gost_key_new(void *provctx)
+static void *gost_keymgmt_new(void *provctx)
 {
-    return EC_KEY_new();
+    GOST_KEYMGMT_CTX *ctx = OPENSSL_zalloc(sizeof(*ctx));
+
+    if (ctx != NULL)
+        ctx->provctx = provctx;
+    return ctx;
 }
 
-static void gost_key_free(void *keydata)
+static void gost_keymgmt_free(void *vctx)
 {
-    EC_KEY_free(keydata);
-}
+    GOST_KEYMGMT_CTX *ctx = vctx;
 
-typedef struct gost_gen_ctx_st {
-    void *provctx;
-    int param_nid;
-} GOST_GEN_CTX;
+    if (ctx != NULL) {
+        EC_KEY_free(ctx->ec);
+        OPENSSL_free(ctx);
+    }
+}
 
 static const char *gost_query_operation_name(int op_id)
 {
@@ -32,7 +36,8 @@ static const char *gost_query_operation_name(int op_id)
 
 static int gost_has(const void *keydata, int selection)
 {
-    const EC_KEY *ec = keydata;
+    const GOST_KEYMGMT_CTX *ctx = keydata;
+    const EC_KEY *ec = ctx->ec;
     int ok = 1;
 
     if ((selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0)
@@ -68,19 +73,18 @@ static const OSSL_PARAM *gost_imexport_types(int selection)
 
 static void gost_gen_cleanup(void *genctx)
 {
-    OPENSSL_free(genctx);
+    /* no cleanup needed since genctx is returned as keydata */
 }
 
 static void *gost_gen_init(void *provctx, int selection,
                            const OSSL_PARAM params[], int def_nid)
 {
-    GOST_GEN_CTX *gctx = OPENSSL_zalloc(sizeof(*gctx));
+    GOST_KEYMGMT_CTX *gctx = gost_keymgmt_new(provctx);
     const OSSL_PARAM *p;
     const char *name = NULL;
 
     if (gctx == NULL)
         return NULL;
-    gctx->provctx = provctx;
     gctx->param_nid = def_nid;
 
     if (params != NULL
@@ -97,7 +101,7 @@ static void *gost_gen_init(void *provctx, int selection,
 
 static void *gost_gen(void *genctx, OSSL_CALLBACK *osslcb, void *cbarg)
 {
-    GOST_GEN_CTX *gctx = genctx;
+    GOST_KEYMGMT_CTX *gctx = genctx;
     EC_KEY *ec = EC_KEY_new();
 
     if (ec == NULL)
@@ -105,24 +109,35 @@ static void *gost_gen(void *genctx, OSSL_CALLBACK *osslcb, void *cbarg)
     if (!fill_GOST_EC_params(ec, gctx->param_nid)
         || !gost_ec_keygen(ec)) {
         EC_KEY_free(ec);
-        ec = NULL;
+        return NULL;
     }
     /* genctx will be cleaned up by the framework */
-    return ec;
+    return gctx;
 }
 
 static void *gost_load(const void *reference, size_t reference_sz)
 {
+    GOST_KEYMGMT_CTX *ctx = gost_keymgmt_new(NULL);
     EC_KEY *ec = NULL;
+
+    if (ctx == NULL)
+        return NULL;
     if (reference_sz == sizeof(ec))
         memcpy(&ec, reference, sizeof(ec));
-    return ec;
+    ctx->ec = ec;
+    if (ec != NULL) {
+        const EC_GROUP *grp = EC_KEY_get0_group(ec);
+        if (grp != NULL)
+            ctx->param_nid = EC_GROUP_get_curve_name(grp);
+    }
+    return ctx;
 }
 
 static int gost_get_params(void *key, OSSL_PARAM params[])
 {
-    EC_KEY *ec = key;
-    const EC_GROUP *group = EC_KEY_get0_group(ec);
+    GOST_KEYMGMT_CTX *ctx = key;
+    EC_KEY *ec = ctx->ec;
+    const EC_GROUP *group = ec != NULL ? EC_KEY_get0_group(ec) : NULL;
     OSSL_PARAM *p;
 
     if (group == NULL)
@@ -151,10 +166,11 @@ static int gost_get_params(void *key, OSSL_PARAM params[])
 static int gost_export(void *keydata, int selection,
                        OSSL_CALLBACK *param_cb, void *cbarg)
 {
-    EC_KEY *ec = keydata;
-    const EC_GROUP *group = EC_KEY_get0_group(ec);
-    const EC_POINT *pub = EC_KEY_get0_public_key(ec);
-    const BIGNUM *priv = EC_KEY_get0_private_key(ec);
+    GOST_KEYMGMT_CTX *ctx = keydata;
+    EC_KEY *ec = ctx->ec;
+    const EC_GROUP *group = ec != NULL ? EC_KEY_get0_group(ec) : NULL;
+    const EC_POINT *pub = ec != NULL ? EC_KEY_get0_public_key(ec) : NULL;
+    const BIGNUM *priv = ec != NULL ? EC_KEY_get0_private_key(ec) : NULL;
     OSSL_PARAM_BLD *bld = NULL;
     OSSL_PARAM *params = NULL;
     unsigned char *pubbuf = NULL;
@@ -210,18 +226,30 @@ static int gost_export(void *keydata, int selection,
 
 static int gost_import(void *keydata, int selection, const OSSL_PARAM params[])
 {
-    EC_KEY *ec = keydata;
+    GOST_KEYMGMT_CTX *ctx = keydata;
+    EC_KEY *ec = ctx->ec;
     const OSSL_PARAM *p;
+
+    if (ec == NULL) {
+        ec = EC_KEY_new();
+        if (ec == NULL)
+            return 0;
+        ctx->ec = ec;
+    }
+
 
     if ((p = OSSL_PARAM_locate_const(params, OSSL_PKEY_PARAM_GROUP_NAME)) != NULL) {
         const char *name = NULL;
+        int nid;
+        
         if (!OSSL_PARAM_get_utf8_string_ptr(p, &name))
             return 0;
-        int nid = OBJ_sn2nid(name);
+        nid = OBJ_sn2nid(name);
         if (nid == NID_undef)
             nid = OBJ_txt2nid(name);
         if (nid == NID_undef || !fill_GOST_EC_params(ec, nid))
             return 0;
+        ctx->param_nid = nid;
     }
     if ((selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0
         && (p = OSSL_PARAM_locate_const(params, OSSL_PKEY_PARAM_PRIV_KEY)) != NULL) {
@@ -248,6 +276,8 @@ static int gost_import(void *keydata, int selection, const OSSL_PARAM params[])
         }
         EC_POINT_free(point);
     }
+    if (EC_KEY_get0_group(ec) != NULL)
+        ctx->param_nid = EC_GROUP_get_curve_name(EC_KEY_get0_group(ec));
     return 1;
 }
 
@@ -276,8 +306,8 @@ static void *gost2012_512_gen_init(void *provctx, int selection,
 typedef void (*fptr_t)(void);
 
 static const OSSL_DISPATCH gost2001_keymgmt_functions[] = {
-    { OSSL_FUNC_KEYMGMT_NEW, (fptr_t)gost_key_new },
-    { OSSL_FUNC_KEYMGMT_FREE, (fptr_t)gost_key_free },
+    { OSSL_FUNC_KEYMGMT_NEW, (fptr_t)gost_keymgmt_new },
+    { OSSL_FUNC_KEYMGMT_FREE, (fptr_t)gost_keymgmt_free },
     { OSSL_FUNC_KEYMGMT_GEN_INIT, (fptr_t)gost2001_gen_init },
     { OSSL_FUNC_KEYMGMT_GEN, (fptr_t)gost_gen },
     { OSSL_FUNC_KEYMGMT_GEN_CLEANUP, (fptr_t)gost_gen_cleanup },
@@ -294,8 +324,8 @@ static const OSSL_DISPATCH gost2001_keymgmt_functions[] = {
 };
 
 static const OSSL_DISPATCH gost2012_256_keymgmt_functions[] = {
-    { OSSL_FUNC_KEYMGMT_NEW, (fptr_t)gost_key_new },
-    { OSSL_FUNC_KEYMGMT_FREE, (fptr_t)gost_key_free },
+    { OSSL_FUNC_KEYMGMT_NEW, (fptr_t)gost_keymgmt_new },
+    { OSSL_FUNC_KEYMGMT_FREE, (fptr_t)gost_keymgmt_free },
     { OSSL_FUNC_KEYMGMT_GEN_INIT, (fptr_t)gost2012_256_gen_init },
     { OSSL_FUNC_KEYMGMT_GEN, (fptr_t)gost_gen },
     { OSSL_FUNC_KEYMGMT_GEN_CLEANUP, (fptr_t)gost_gen_cleanup },
@@ -312,8 +342,8 @@ static const OSSL_DISPATCH gost2012_256_keymgmt_functions[] = {
 };
 
 static const OSSL_DISPATCH gost2012_512_keymgmt_functions[] = {
-    { OSSL_FUNC_KEYMGMT_NEW, (fptr_t)gost_key_new },
-    { OSSL_FUNC_KEYMGMT_FREE, (fptr_t)gost_key_free },
+    { OSSL_FUNC_KEYMGMT_NEW, (fptr_t)gost_keymgmt_new },
+    { OSSL_FUNC_KEYMGMT_FREE, (fptr_t)gost_keymgmt_free },
     { OSSL_FUNC_KEYMGMT_GEN_INIT, (fptr_t)gost2012_512_gen_init },
     { OSSL_FUNC_KEYMGMT_GEN, (fptr_t)gost_gen },
     { OSSL_FUNC_KEYMGMT_GEN_CLEANUP, (fptr_t)gost_gen_cleanup },
