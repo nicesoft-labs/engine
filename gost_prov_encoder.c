@@ -3,6 +3,7 @@
 #include <openssl/pem.h>
 #include <openssl/x509.h>
 #include <openssl/evp.h>
+#include <openssl/err.h>
 #include "gost_prov.h"
 #include "gost_lcl.h"
 #include "gost_asn1.h"
@@ -54,34 +55,43 @@ static int encoder_encode(void *vctx, OSSL_CORE_BIO *cout, const void *obj,
     if (gctx == NULL || gctx->ec == NULL || obj_abstract != NULL)
         return 0;
 
-    out = BIO_new_from_core_bio(ctx->provctx->libctx, cout);
+    DEBUG_LOG("encoder_encode: param_nid=%d selection=%d", gctx->param_nid, selection);
+
+    if (ctx->provctx->libctx != NULL)
+        out = BIO_new_from_core_bio(ctx->provctx->libctx, cout);
     if (out == NULL) {
-        fprintf(stderr, "BIO_new_from_core_bio returned NULL\n");
+        DEBUG_LOG("BIO_new_from_core_bio returned NULL");
         ERR_raise(ERR_LIB_PROV, ERR_R_MALLOC_FAILURE);
         goto end;
     }
 
     if ((selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0 &&
         EC_KEY_get0_private_key(gctx->ec) != NULL) {
-            fprintf(stderr, "call gost_priv_key_info_from_ec param_nid=%d\n",
-                    gctx->param_nid);
+            DEBUG_LOG("encode PRIVATE key path param_nid=%d", gctx->param_nid);
+            DEBUG_LOG("call gost_priv_key_info_from_ec param_nid=%d", gctx->param_nid);
         privinfo = gost_priv_key_info_from_ec(gctx->ec, gctx->param_nid);
         if (privinfo != NULL) {
-            if (ctx->ispem)
+            if (ctx->ispem) {
+                DEBUG_LOG("serialize path: PEM private key");
                 ret = PEM_write_bio_GOST_PRIVATE_KEY_INFO(out, privinfo);
-            else
+            } else {
+                DEBUG_LOG("serialize path: DER private key");
                 ret = i2d_GOST_PRIVATE_KEY_INFO_bio(out, privinfo);
+            }
         }
     } else if ((selection & OSSL_KEYMGMT_SELECT_PUBLIC_KEY) != 0 &&
                EC_KEY_get0_public_key(gctx->ec) != NULL) {
-        fprintf(stderr, "call gost_pub_key_info_from_ec param_nid=%d\n",
-                gctx->param_nid);
+        DEBUG_LOG("encode PUBLIC key path param_nid=%d", gctx->param_nid);
+        DEBUG_LOG("call gost_pub_key_info_from_ec param_nid=%d", gctx->param_nid);
         pubinfo = gost_pub_key_info_from_ec(gctx->ec, gctx->param_nid);
         if (pubinfo != NULL) {
-            if (ctx->ispem)
+            if (ctx->ispem) {
+                DEBUG_LOG("serialize path: PEM public key");
                 ret = PEM_write_bio_GOST_PUBLIC_KEY_INFO(out, pubinfo);
-            else
+            } else {
+                DEBUG_LOG("serialize path: DER public key");
                 ret = i2d_GOST_PUBLIC_KEY_INFO_bio(out, pubinfo);
+            }
         }
     }
 
