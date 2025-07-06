@@ -9,6 +9,7 @@
 
 #include <openssl/core_dispatch.h>
 #include <openssl/core_names.h>
+#include <openssl/crypto.h>
 #include "gost_prov.h"
 #include "gost_lcl.h"
 #include "prov/err.h"           /* libprov err functions */
@@ -56,22 +57,32 @@ extern int populate_gost_engine(ENGINE *e);
 static PROV_CTX *provider_ctx_new(const OSSL_CORE_HANDLE *core,
                                   const OSSL_DISPATCH *in)
 {
-    PROV_CTX *ctx;
+    PROV_CTX *ctx = NULL;
 
-    if ((ctx = OPENSSL_zalloc(sizeof(*ctx))) != NULL
-        && (ctx->proverr_handle = proverr_new_handle(core, in)) != NULL
-        && (ctx->libctx = OSSL_LIB_CTX_new()) != NULL
-        && (ctx->e = ENGINE_new()) != NULL
-        && populate_gost_engine(ctx->e)) {
-        ctx->core_handle = core;
+    if ((ctx = OPENSSL_zalloc(sizeof(*ctx))) == NULL)
+        return NULL;
 
-        /* Ugly hack */
-        err_handle = ctx->proverr_handle;
-    } else {
-        provider_ctx_free(ctx);
-        ctx = NULL;
-    }
+    ctx->core_handle = core;
+    ctx->proverr_handle = proverr_new_handle(core, in);
+    if (ctx->proverr_handle == NULL)
+        goto err;
+
+    ctx->libctx = OSSL_LIB_CTX_new_from_dispatch(core, in);
+    if (ctx->libctx == NULL)
+        ctx->libctx = OSSL_LIB_CTX_new();
+    if (ctx->libctx == NULL)
+        goto err;
+
+    ctx->e = ENGINE_new();
+    if (ctx->e == NULL || !populate_gost_engine(ctx->e))
+        goto err;
+
+    /* Ugly hack */
+    err_handle = ctx->proverr_handle;
     return ctx;
+ err:
+    provider_ctx_free(ctx);
+    return NULL;
 }
 
 /*********************************************************************
