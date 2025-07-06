@@ -114,7 +114,7 @@ end:
 }
 
 static int encoder_set_ctx_params(void *vctx, const OSSL_PARAM params[])
-
+{
     GOST_ENCODER_CTX *ctx = vctx;
     const OSSL_PARAM *p;
 
