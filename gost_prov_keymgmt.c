@@ -159,6 +159,7 @@ static void *gost_gen_init(void *provctx, int selection,
         if (nid != NID_undef)
             gctx->param_nid = nid;
     }
+    fprintf(stderr, "gost_gen_init: param_nid=%d\n", gctx->param_nid);
     return gctx;
 }
 
@@ -169,6 +170,7 @@ static void *gost_gen(void *genctx, OSSL_CALLBACK *osslcb, void *cbarg)
 
     if (ec == NULL)
         return NULL;
+    fprintf(stderr, "gost_gen: param_nid=%d\n", gctx->param_nid);
     if (!fill_GOST_EC_params(ec, gctx->param_nid)
         || !gost_ec_keygen(ec)) {
         EC_KEY_free(ec);
@@ -196,6 +198,7 @@ static void *gost_load(const void *reference, size_t reference_sz)
         if (grp != NULL)
             ctx->param_nid = EC_GROUP_get_curve_name(grp);
     }
+    fprintf(stderr, "gost_load: param_nid=%d\n", ctx->param_nid);
     return ctx;
 }
 
@@ -317,6 +320,7 @@ int gost_import(void *keydata, int selection, const OSSL_PARAM params[])
             return 0;
         ctx->param_nid = nid;
     }
+    fprintf(stderr, "gost_import: param_nid=%d after group name\n", ctx->param_nid);
     if ((selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0
         && (p = OSSL_PARAM_locate_const(params, OSSL_PKEY_PARAM_PRIV_KEY)) != NULL) {
         BIGNUM *bn = BN_bin2bn(p->data, p->data_size, NULL);
@@ -344,6 +348,8 @@ int gost_import(void *keydata, int selection, const OSSL_PARAM params[])
     }
     if (EC_KEY_get0_group(ec) != NULL)
         ctx->param_nid = EC_GROUP_get_curve_name(EC_KEY_get0_group(ec));
+        fprintf(stderr, "gost_import: param_nid=%d after key load\n", ctx->param_nid);
+
 
     if ((selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0) {
         if (!EC_KEY_check_key(ec))
