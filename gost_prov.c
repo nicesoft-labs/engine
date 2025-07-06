@@ -98,6 +98,8 @@ static const OSSL_ALGORITHM *gost_operation(void *vprovctx,
         return GOST_prov_keymgmts;
     case OSSL_OP_ENCODER:
         return GOST_prov_encoders;
+    case OSSL_OP_DECODER:
+        return GOST_prov_decoders;
     }
     return NULL;
 }
