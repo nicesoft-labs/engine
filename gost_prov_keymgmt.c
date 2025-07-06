@@ -5,8 +5,15 @@
 #include <openssl/param_build.h>
 #include <openssl/bn.h>
 #include <openssl/ec.h>
+#include <openssl/err.h>
+#include <openssl/proverr.h>
 #include "gost_prov.h"
 #include "gost_lcl.h"
+
+#ifndef PROV_R_INVALID_PUBLIC_KEY
+# define PROV_R_INVALID_PUBLIC_KEY PROV_R_NOT_A_PUBLIC_KEY
+#endif
+
 
 /* Key management context */
 
@@ -322,9 +329,21 @@ int gost_import(void *keydata, int selection, const OSSL_PARAM params[])
     }
     if (EC_KEY_get0_group(ec) != NULL)
         ctx->param_nid = EC_GROUP_get_curve_name(EC_KEY_get0_group(ec));
-    if ((selection & (OSSL_KEYMGMT_SELECT_PRIVATE_KEY | OSSL_KEYMGMT_SELECT_PUBLIC_KEY)) != 0
-        && !EC_KEY_check_key(ec))
-        return 0;
+
+    if ((selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0) {
+        if (!EC_KEY_check_key(ec))
+            return 0;
+    } else if ((selection & OSSL_KEYMGMT_SELECT_PUBLIC_KEY) != 0
+               && (selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) == 0) {
+        const EC_GROUP *group = EC_KEY_get0_group(ec);
+        const EC_POINT *pt = EC_KEY_get0_public_key(ec);
+
+        if (group == NULL || pt == NULL
+            || EC_POINT_is_on_curve(group, pt, NULL) != 1) {
+            ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_PUBLIC_KEY);
+            return 0;
+        }
+    }
     return 1;
 }
 
