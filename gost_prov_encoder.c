@@ -25,7 +25,8 @@
 
 typedef struct {
     PROV_CTX *provctx;
-    int ispem; /* 0 = DER, 1 = PEM */
+    int ispem;      /* 0 = DER, 1 = PEM */
+    int selection;  /* expected selection */
 } GOST_ENCODER_CTX;
 
 static void *encoder_newctx(void *provctx)
@@ -58,6 +59,7 @@ static int encoder_encode(void *vctx, OSSL_CORE_BIO *cout, const void *obj,
     if (gctx == NULL || gctx->ec == NULL || obj_abstract != NULL)
         return 0;
 
+    ctx->selection = selection;
     DEBUG_LOG("encoder_encode: param_nid=%d selection=%d", gctx->param_nid, selection);
 
     if (ctx->provctx->libctx != NULL)
@@ -160,26 +162,15 @@ static int encoder_get_params_generic(OSSL_PARAM params[],
     return 1;
 }
 
-static int encoder_get_params_der_priv(OSSL_PARAM params[])
+static int encoder_get_params(void *vctx, OSSL_PARAM params[])
 {
-    return encoder_get_params_generic(params, "DER", "PrivateKeyInfo");
-}
+    GOST_ENCODER_CTX *ctx = vctx;
+    const char *type = ctx->ispem ? "PEM" : "DER";
+    const char *structure =
+        (ctx->selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0 ?
+        "PrivateKeyInfo" : "SubjectPublicKeyInfo";
 
-static int encoder_get_params_pem_priv(OSSL_PARAM params[])
-{
-    return encoder_get_params_generic(params, "PEM", "PrivateKeyInfo");
-}
-
-static int encoder_get_params_der_pub(OSSL_PARAM params[])
-{
-    return encoder_get_params_generic(params, "DER",
-                                      "SubjectPublicKeyInfo");
-}
-
-static int encoder_get_params_pem_pub(OSSL_PARAM params[])
-{
-    return encoder_get_params_generic(params, "PEM",
-                                      "SubjectPublicKeyInfo");
+    return encoder_get_params_generic(params, type, structure);
 }
 
 static const OSSL_PARAM *encoder_gettable_params(void *provctx)
@@ -197,15 +188,18 @@ static const OSSL_PARAM *encoder_gettable_params(void *provctx)
 typedef void (*fptr_t)(void);
 /*
  * This macro declares DER and PEM variants for each GOST encoder.
- * The format is selected via ispemflag or set_ctx_params.
+ * The format and expected key selection are preset via the arguments.
  */
 
-#define MAKE_ENCODER_FUNCTIONS(alg, fmt, ispemflag, suffix)                \
+#define MAKE_ENCODER_FUNCTIONS(alg, fmt, ispemflag, selflag, suffix)       \
     static void *alg##_##fmt##_##suffix##_encoder_newctx(void *provctx)    \
     {                                                                      \
         GOST_ENCODER_CTX *ctx = encoder_newctx(provctx);                   \
-        if (ctx != NULL)                                                   \
+        if (ctx != NULL) {                                                 \
             ctx->ispem = ispemflag;                                        \
+            ctx->selection = selflag;                                      \
+        }                                                                  \
+    ctx->ispem = ispemflag;                                        \
         return ctx;                                                        \
     }                                                                      \
     static const OSSL_DISPATCH alg##_##fmt##_##suffix##_encoder_functions[] = { \
@@ -217,25 +211,24 @@ typedef void (*fptr_t)(void);
         { OSSL_FUNC_ENCODER_DOES_SELECTION, (fptr_t)encoder_does_selection },\
         { OSSL_FUNC_ENCODER_GETTABLE_PARAMS,                                \
           (fptr_t)encoder_gettable_params },                                \
-        { OSSL_FUNC_ENCODER_GET_PARAMS,                                     \
-          (fptr_t)encoder_get_params_##fmt##_##suffix },                   \
+        { OSSL_FUNC_ENCODER_GET_PARAMS, (fptr_t)encoder_get_params },       \
         { 0, NULL }                                                        \
     }
 
-MAKE_ENCODER_FUNCTIONS(gost2001, der, 0, priv);
-MAKE_ENCODER_FUNCTIONS(gost2001, pem, 1, priv);
-MAKE_ENCODER_FUNCTIONS(gost2001, der, 0, pub);
-MAKE_ENCODER_FUNCTIONS(gost2001, pem, 1, pub);
+MAKE_ENCODER_FUNCTIONS(gost2001, der, 0, OSSL_KEYMGMT_SELECT_PRIVATE_KEY, priv);
+MAKE_ENCODER_FUNCTIONS(gost2001, pem, 1, OSSL_KEYMGMT_SELECT_PRIVATE_KEY, priv);
+MAKE_ENCODER_FUNCTIONS(gost2001, der, 0, OSSL_KEYMGMT_SELECT_PUBLIC_KEY, pub);
+MAKE_ENCODER_FUNCTIONS(gost2001, pem, 1, OSSL_KEYMGMT_SELECT_PUBLIC_KEY, pub);
 
-MAKE_ENCODER_FUNCTIONS(gost2012_256, der, 0, priv);
-MAKE_ENCODER_FUNCTIONS(gost2012_256, pem, 1, priv);
-MAKE_ENCODER_FUNCTIONS(gost2012_256, der, 0, pub);
-MAKE_ENCODER_FUNCTIONS(gost2012_256, pem, 1, pub);
+MAKE_ENCODER_FUNCTIONS(gost2012_256, der, 0, OSSL_KEYMGMT_SELECT_PRIVATE_KEY, priv);
+MAKE_ENCODER_FUNCTIONS(gost2012_256, pem, 1, OSSL_KEYMGMT_SELECT_PRIVATE_KEY, priv);
+MAKE_ENCODER_FUNCTIONS(gost2012_256, der, 0, OSSL_KEYMGMT_SELECT_PUBLIC_KEY, pub);
+MAKE_ENCODER_FUNCTIONS(gost2012_256, pem, 1, OSSL_KEYMGMT_SELECT_PUBLIC_KEY, pub);
 
-MAKE_ENCODER_FUNCTIONS(gost2012_512, der, 0, priv);
-MAKE_ENCODER_FUNCTIONS(gost2012_512, pem, 1, priv);
-MAKE_ENCODER_FUNCTIONS(gost2012_512, der, 0, pub);
-MAKE_ENCODER_FUNCTIONS(gost2012_512, pem, 1, pub);
+MAKE_ENCODER_FUNCTIONS(gost2012_512, der, 0, OSSL_KEYMGMT_SELECT_PRIVATE_KEY, priv);
+MAKE_ENCODER_FUNCTIONS(gost2012_512, pem, 1, OSSL_KEYMGMT_SELECT_PRIVATE_KEY, priv);
+MAKE_ENCODER_FUNCTIONS(gost2012_512, der, 0, OSSL_KEYMGMT_SELECT_PUBLIC_KEY, pub);
+MAKE_ENCODER_FUNCTIONS(gost2012_512, pem, 1, OSSL_KEYMGMT_SELECT_PUBLIC_KEY, pub);
 
 const OSSL_ALGORITHM GOST_prov_encoders[] = {
     { "gost2001", "provider=gostprov,output=der,structure=PrivateKeyInfo", gost2001_der_priv_encoder_functions },
