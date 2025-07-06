@@ -204,7 +204,8 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
     size_t pidx = 0;
     int ok = 0;
     int sel = 0;
-
+    
+    ctx->selection = selection;
     DEBUG_LOG("decoder_decode: selection=%d", selection);
 
     (void)cb;
@@ -391,24 +392,15 @@ static int decoder_get_params_generic(OSSL_PARAM params[],
     return 1;
 }
 
-static int decoder_get_params_der_priv(OSSL_PARAM params[])
+static int decoder_get_params(void *vctx, OSSL_PARAM params[])
 {
-    return decoder_get_params_generic(params, "DER", "PrivateKeyInfo");
-}
+    GOST_DECODER_CTX *ctx = vctx;
+    const char *type = ctx->ispem ? "PEM" : "DER";
+    const char *structure =
+        (ctx->selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0 ?
+        "PrivateKeyInfo" : "SubjectPublicKeyInfo";
 
-static int decoder_get_params_pem_priv(OSSL_PARAM params[])
-{
-    return decoder_get_params_generic(params, "PEM", "PrivateKeyInfo");
-}
-
-static int decoder_get_params_der_pub(OSSL_PARAM params[])
-{
-    return decoder_get_params_generic(params, "DER", "SubjectPublicKeyInfo");
-}
-
-static int decoder_get_params_pem_pub(OSSL_PARAM params[])
-{
-    return decoder_get_params_generic(params, "PEM", "SubjectPublicKeyInfo");
+    return decoder_get_params_generic(params, type, structure);
 }
 
 static const OSSL_PARAM *decoder_gettable_params(void *provctx)
@@ -423,12 +415,15 @@ static const OSSL_PARAM *decoder_gettable_params(void *provctx)
 
 typedef void (*fptr_t)(void);
 
-#define MAKE_DECODER_FUNCTIONS(alg, fmt, ispemflag, suffix)                 \
+#define MAKE_DECODER_FUNCTIONS(alg, fmt, ispemflag, selflag, suffix)        \
     static void *alg##_##fmt##_##suffix##_decoder_newctx(void *provctx)    \
     {                                                                      \
         GOST_DECODER_CTX *ctx = decoder_newctx(provctx);                   \
-        if (ctx != NULL)                                                   \
+        if (ctx != NULL) {                                                 \
             ctx->ispem = ispemflag;                                        \
+            ctx->selection = selflag;                                      \
+        }                                                                  \
+    ctx->ispem = ispemflag;                                        \
         return ctx;                                                        \
     }                                                                      \
     static const OSSL_DISPATCH alg##_##fmt##_##suffix##_decoder_functions[] = { \
@@ -439,25 +434,24 @@ typedef void (*fptr_t)(void);
         { OSSL_FUNC_DECODER_EXPORT_OBJECT, (fptr_t)decoder_export_object }, \
         { OSSL_FUNC_DECODER_DOES_SELECTION, (fptr_t)decoder_does_selection },\
         { OSSL_FUNC_DECODER_GETTABLE_PARAMS, (fptr_t)decoder_gettable_params },\
-        { OSSL_FUNC_DECODER_GET_PARAMS,                                     \
-          (fptr_t)decoder_get_params_##fmt##_##suffix },                    \
+        { OSSL_FUNC_DECODER_GET_PARAMS, (fptr_t)decoder_get_params },        \
         { 0, NULL }                                                        \
     }
 
-MAKE_DECODER_FUNCTIONS(gost2001, der, 0, priv);
-MAKE_DECODER_FUNCTIONS(gost2001, pem, 1, priv);
-MAKE_DECODER_FUNCTIONS(gost2001, der, 0, pub);
-MAKE_DECODER_FUNCTIONS(gost2001, pem, 1, pub);
+MAKE_DECODER_FUNCTIONS(gost2001, der, 0, OSSL_KEYMGMT_SELECT_PRIVATE_KEY, priv);
+MAKE_DECODER_FUNCTIONS(gost2001, pem, 1, OSSL_KEYMGMT_SELECT_PRIVATE_KEY, priv);
+MAKE_DECODER_FUNCTIONS(gost2001, der, 0, OSSL_KEYMGMT_SELECT_PUBLIC_KEY, pub);
+MAKE_DECODER_FUNCTIONS(gost2001, pem, 1, OSSL_KEYMGMT_SELECT_PUBLIC_KEY, pub);
 
-MAKE_DECODER_FUNCTIONS(gost2012_256, der, 0, priv);
-MAKE_DECODER_FUNCTIONS(gost2012_256, pem, 1, priv);
-MAKE_DECODER_FUNCTIONS(gost2012_256, der, 0, pub);
-MAKE_DECODER_FUNCTIONS(gost2012_256, pem, 1, pub);
+MAKE_DECODER_FUNCTIONS(gost2012_256, der, 0, OSSL_KEYMGMT_SELECT_PRIVATE_KEY, priv);
+MAKE_DECODER_FUNCTIONS(gost2012_256, pem, 1, OSSL_KEYMGMT_SELECT_PRIVATE_KEY, priv);
+MAKE_DECODER_FUNCTIONS(gost2012_256, der, 0, OSSL_KEYMGMT_SELECT_PUBLIC_KEY, pub);
+MAKE_DECODER_FUNCTIONS(gost2012_256, pem, 1, OSSL_KEYMGMT_SELECT_PUBLIC_KEY, pub);
 
-MAKE_DECODER_FUNCTIONS(gost2012_512, der, 0, priv);
-MAKE_DECODER_FUNCTIONS(gost2012_512, pem, 1, priv);
-MAKE_DECODER_FUNCTIONS(gost2012_512, der, 0, pub);
-MAKE_DECODER_FUNCTIONS(gost2012_512, pem, 1, pub);
+MAKE_DECODER_FUNCTIONS(gost2012_512, der, 0, OSSL_KEYMGMT_SELECT_PRIVATE_KEY, priv);
+MAKE_DECODER_FUNCTIONS(gost2012_512, pem, 1, OSSL_KEYMGMT_SELECT_PRIVATE_KEY, priv);
+MAKE_DECODER_FUNCTIONS(gost2012_512, der, 0, OSSL_KEYMGMT_SELECT_PUBLIC_KEY, pub);
+MAKE_DECODER_FUNCTIONS(gost2012_512, pem, 1, OSSL_KEYMGMT_SELECT_PUBLIC_KEY, pub);
 
 const OSSL_ALGORITHM GOST_prov_decoders[] = {
     { "gost2001", "provider=gostprov,input=der,structure=PrivateKeyInfo", gost2001_der_priv_decoder_functions },
