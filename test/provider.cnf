@@ -2,7 +2,7 @@ openssl_conf = openssl_def
 [openssl_def]
 providers = providers
 [providers]
-gostprov = provider_conf
 default = provider_conf
+gostprov = provider_conf
 [provider_conf]
 activate = 1
