@@ -199,7 +199,6 @@ typedef void (*fptr_t)(void);
             ctx->ispem = ispemflag;                                        \
             ctx->selection = selflag;                                      \
         }                                                                  \
-    ctx->ispem = ispemflag;                                        \
         return ctx;                                                        \
     }                                                                      \
     static const OSSL_DISPATCH alg##_##fmt##_##suffix##_encoder_functions[] = { \
