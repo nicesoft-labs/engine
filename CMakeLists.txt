@@ -3,7 +3,7 @@ project(gost-engine LANGUAGES C)
 
 option(WITH_ENGINE "Build legacy engine" ON)
 option(WITH_GOSTSUM "Build gostsum utilities" ON)
-option(ENABLE_GOST_DEBUG "Enable provider debug logging" OFF)
+option(ENABLE_GOST_DEBUG "Enable provider debug logging" ON)
 
 
 include(GNUInstallDirs)
