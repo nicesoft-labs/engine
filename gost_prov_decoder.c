@@ -393,24 +393,33 @@ static int decoder_get_params_generic(OSSL_PARAM params[],
 
 static int decoder_get_params_der_priv(OSSL_PARAM params[])
 {
-    return decoder_get_params_generic(params, "der", "PrivateKeyInfo");
+    return decoder_get_params_generic(params, "DER", "PrivateKeyInfo");
 }
 
 static int decoder_get_params_pem_priv(OSSL_PARAM params[])
 {
-    return decoder_get_params_generic(params, "pem", "PrivateKeyInfo");
+    return decoder_get_params_generic(params, "PEM", "PrivateKeyInfo");
 }
 
 static int decoder_get_params_der_pub(OSSL_PARAM params[])
 {
-    return decoder_get_params_generic(params, "der", "SubjectPublicKeyInfo");
+    return decoder_get_params_generic(params, "DER", "SubjectPublicKeyInfo");
 }
 
 static int decoder_get_params_pem_pub(OSSL_PARAM params[])
 {
-    return decoder_get_params_generic(params, "pem", "SubjectPublicKeyInfo");
+    return decoder_get_params_generic(params, "PEM", "SubjectPublicKeyInfo");
 }
 
+static const OSSL_PARAM *decoder_gettable_params(void *provctx)
+{
+    static const OSSL_PARAM known_gettable[] = {
+        OSSL_PARAM_utf8_string(OSSL_DECODER_PARAM_INPUT_TYPE, NULL, 0),
+        OSSL_PARAM_utf8_string(OSSL_DECODER_PARAM_STRUCTURE, NULL, 0),
+        OSSL_PARAM_END
+    };
+    return known_gettable;
+}
 
 typedef void (*fptr_t)(void);
 
@@ -429,6 +438,7 @@ typedef void (*fptr_t)(void);
         { OSSL_FUNC_DECODER_DECODE, (fptr_t)decoder_decode },               \
         { OSSL_FUNC_DECODER_EXPORT_OBJECT, (fptr_t)decoder_export_object }, \
         { OSSL_FUNC_DECODER_DOES_SELECTION, (fptr_t)decoder_does_selection },\
+        { OSSL_FUNC_DECODER_GETTABLE_PARAMS, (fptr_t)decoder_gettable_params },\
         { OSSL_FUNC_DECODER_GET_PARAMS,                                     \
           (fptr_t)decoder_get_params_##fmt##_##suffix },                    \
         { 0, NULL }                                                        \
