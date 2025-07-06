@@ -38,6 +38,7 @@ int main(void)
         int is_priv;
         for (is_priv = 0; is_priv < 2; is_priv++) {
             int selection = is_priv ? OSSL_KEYMGMT_SELECT_PRIVATE_KEY : OSSL_KEYMGMT_SELECT_PUBLIC_KEY;
+            const char *structure = is_priv ? "PrivateKeyInfo" : "SubjectPublicKeyInfo";
         unsigned char *der = NULL, *pem = NULL;
         size_t der_len = 0, pem_len = 0;
         EVP_PKEY *kder = NULL, *kpem = NULL;
@@ -45,54 +46,56 @@ int main(void)
         OSSL_ENCODER_CTX *ectx = NULL;
         OSSL_DECODER_CTX *dctx = NULL;
 
-        ectx = OSSL_ENCODER_CTX_new_for_pkey(key, selection, "DER", NULL, "provider=gostprov");
-        T(ectx != NULL);
-        T(OSSL_ENCODER_to_data(ectx, &der, &der_len));
-        OSSL_ENCODER_CTX_free(ectx);
-        ectx = NULL;
+            /* encode original key to DER */
+            ectx = OSSL_ENCODER_CTX_new_for_pkey(key, selection, "DER", structure, "provider=gostprov");
+            T(ectx != NULL);
+            T(OSSL_ENCODER_to_data(ectx, &der, &der_len));
+            OSSL_ENCODER_CTX_free(ectx);
+            ectx = NULL;
 
-        ectx = OSSL_ENCODER_CTX_new_for_pkey(key, selection, "PEM", NULL, "provider=gostprov");
-        T(ectx != NULL);
-        T(OSSL_ENCODER_to_data(ectx, &pem, &pem_len));
-        OSSL_ENCODER_CTX_free(ectx);
-        ectx = NULL;
+            /* decode DER back to a key */
+            p = der;
+            dctx = OSSL_DECODER_CTX_new_for_pkey(&kder, "DER", NULL, "gost2012_256", selection, NULL, "provider=gostprov");
+            T(dctx != NULL);
+            T(OSSL_DECODER_from_data(dctx, &p, &der_len));
+            OSSL_DECODER_CTX_free(dctx);
+            dctx = NULL;
 
-        p = der;
-        dctx = OSSL_DECODER_CTX_new_for_pkey(&kder, "DER", NULL, "gost2012_256", selection, NULL, "provider=gostprov");
-        T(dctx != NULL);
-        T(OSSL_DECODER_from_data(dctx, &p, &der_len));
-        OSSL_DECODER_CTX_free(dctx);
-        dctx = NULL;
-        fprintf(stderr, "DER decoded type: %s\n", EVP_PKEY_get0_type_name(kder));
+            T(EVP_PKEY_eq(key, kder));
+            ctx = EVP_PKEY_CTX_new_from_pkey(NULL, kder, NULL);
+            T(ctx != NULL);
+            T(EVP_PKEY_check(ctx) > 0);
+            EVP_PKEY_CTX_free(ctx);
+            ctx = NULL;
 
-        T(EVP_PKEY_eq(key, kder));
-        ctx = EVP_PKEY_CTX_new_from_pkey(NULL, kder, NULL);
-        T(ctx != NULL);
-        T(EVP_PKEY_check(ctx) > 0);
-        EVP_PKEY_CTX_free(ctx);
-        ctx = NULL;
-        EVP_PKEY_free(kder);
-        kder = NULL;
+            /* encode the decoded key to PEM and decode again */
+            ectx = OSSL_ENCODER_CTX_new_for_pkey(kder, selection, "PEM", structure, "provider=gostprov");
+            T(ectx != NULL);
+            T(OSSL_ENCODER_to_data(ectx, &pem, &pem_len));
+            OSSL_ENCODER_CTX_free(ectx);
+            ectx = NULL;
 
-        p = pem;
-        dctx = OSSL_DECODER_CTX_new_for_pkey(&kpem, "PEM", NULL, "gost2012_256", selection, NULL, "provider=gostprov");
-        T(dctx != NULL);
-        T(OSSL_DECODER_from_data(dctx, &p, &pem_len));
-        OSSL_DECODER_CTX_free(dctx);
-        dctx = NULL;
-        fprintf(stderr, "PEM decoded type: %s\n", EVP_PKEY_get0_type_name(kpem));
+            p = pem;
+            dctx = OSSL_DECODER_CTX_new_for_pkey(&kpem, "PEM", NULL, "gost2012_256", selection, NULL, "provider=gostprov");
+            T(dctx != NULL);
+            T(OSSL_DECODER_from_data(dctx, &p, &pem_len));
+            OSSL_DECODER_CTX_free(dctx);
+            dctx = NULL;
 
-        T(EVP_PKEY_eq(key, kpem));
-        ctx = EVP_PKEY_CTX_new_from_pkey(NULL, kpem, NULL);
-        T(ctx != NULL);
-        T(EVP_PKEY_check(ctx) > 0);
-        EVP_PKEY_CTX_free(ctx);
-        ctx = NULL;
-        EVP_PKEY_free(kpem);
-        kpem = NULL;
+            T(EVP_PKEY_eq(key, kpem));
+            ctx = EVP_PKEY_CTX_new_from_pkey(NULL, kpem, NULL);
+            T(ctx != NULL);
+            T(EVP_PKEY_check(ctx) > 0);
+            EVP_PKEY_CTX_free(ctx);
+            ctx = NULL;
+            EVP_PKEY_free(kpem);
+            kpem = NULL;
 
-        OPENSSL_free(der);
-        OPENSSL_free(pem);
+            EVP_PKEY_free(kder);
+            kder = NULL;
+
+            OPENSSL_free(der);
+            OPENSSL_free(pem);
         }
     }
 
