@@ -5,6 +5,8 @@
 #include <openssl/evp.h>
 #include "gost_prov.h"
 #include "gost_lcl.h"
+#include "gost_asn1.h"
+
 
 #ifndef OSSL_ENCODER_PARAM_OUTPUT_TYPE
 # define OSSL_ENCODER_PARAM_OUTPUT_TYPE "output-type"
@@ -38,55 +40,19 @@ static void encoder_freectx(void *vctx)
     OPENSSL_free(ctx);
 }
 
-/* Map parameter set NID to algorithm NID */
-static int param_to_alg_nid(int param_nid)
-{
-    switch (param_nid) {
-    case NID_id_GostR3410_2001_CryptoPro_A_ParamSet:
-    case NID_id_GostR3410_2001_CryptoPro_B_ParamSet:
-    case NID_id_GostR3410_2001_CryptoPro_C_ParamSet:
-    case NID_id_GostR3410_2001_TestParamSet:
-    case NID_id_GostR3410_2001_CryptoPro_XchA_ParamSet:
-    case NID_id_GostR3410_2001_CryptoPro_XchB_ParamSet:
-        return NID_id_GostR3410_2001;
-
-    case NID_id_tc26_gost_3410_2012_256_paramSetA:
-    case NID_id_tc26_gost_3410_2012_256_paramSetB:
-    case NID_id_tc26_gost_3410_2012_256_paramSetC:
-    case NID_id_tc26_gost_3410_2012_256_paramSetD:
-        return NID_id_GostR3410_2012_256;
-
-    case NID_id_tc26_gost_3410_2012_512_paramSetA:
-    case NID_id_tc26_gost_3410_2012_512_paramSetB:
-    case NID_id_tc26_gost_3410_2012_512_paramSetC:
-        return NID_id_GostR3410_2012_512;
-    }
-    return NID_undef;
-}
-
 static int encoder_encode(void *vctx, OSSL_CORE_BIO *cout, const void *obj,
                           const OSSL_PARAM obj_abstract[], int selection,
                           OSSL_PASSPHRASE_CALLBACK *cb, void *cbarg)
 {
     GOST_ENCODER_CTX *ctx = vctx;
     const GOST_KEYMGMT_CTX *gctx = obj;
-    EVP_PKEY *pkey = NULL;
+    GOST_PRIVATE_KEY_INFO *privinfo = NULL;
+    GOST_PUBLIC_KEY_INFO *pubinfo = NULL;
     BIO *out = NULL;
-    int alg_nid = NID_undef;
     int ret = 0;
 
     if (gctx == NULL || gctx->ec == NULL || obj_abstract != NULL)
         return 0;
-
-    alg_nid = param_to_alg_nid(gctx->param_nid);
-    if (alg_nid == NID_undef)
-        return 0;
-
-    if ((pkey = EVP_PKEY_new()) == NULL)
-        goto end;
-    if (!EVP_PKEY_set_type(pkey, alg_nid)
-        || !EVP_PKEY_set1_EC_KEY(pkey, gctx->ec))
-        goto end;
 
     out = BIO_new_from_core_bio(ctx->provctx->libctx, cout);
     if (out == NULL)
@@ -95,21 +61,28 @@ static int encoder_encode(void *vctx, OSSL_CORE_BIO *cout, const void *obj,
     if ((selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0 &&
         EC_KEY_get0_private_key(gctx->ec) != NULL) {
         if (ctx->ispem)
-            ret = PEM_write_bio_PrivateKey_traditional(out, pkey,
-                                                      NULL, NULL, 0, NULL, NULL);
-        else
-            ret = i2d_PrivateKey_bio(out, pkey);
+        privinfo = gost_priv_key_info_from_ec(gctx->ec, gctx->param_nid);
+        if (privinfo != NULL) {
+            if (ctx->ispem)
+                ret = PEM_write_bio_GOST_PRIVATE_KEY_INFO(out, privinfo);
+            else
+                ret = i2d_GOST_PRIVATE_KEY_INFO_bio(out, privinfo);
+        }
     } else if ((selection & OSSL_KEYMGMT_SELECT_PUBLIC_KEY) != 0 &&
                EC_KEY_get0_public_key(gctx->ec) != NULL) {
-        if (ctx->ispem)
-            ret = PEM_write_bio_PUBKEY(out, pkey);
-        else
-            ret = i2d_PUBKEY_bio(out, pkey);
+        pubinfo = gost_pub_key_info_from_ec(gctx->ec, gctx->param_nid);
+        if (pubinfo != NULL) {
+            if (ctx->ispem)
+                ret = PEM_write_bio_GOST_PUBLIC_KEY_INFO(out, pubinfo);
+            else
+                ret = i2d_GOST_PUBLIC_KEY_INFO_bio(out, pubinfo);
+        }
     }
 
 end:
     BIO_free(out);
-    EVP_PKEY_free(pkey);
+    GOST_PRIVATE_KEY_INFO_free(privinfo);
+    GOST_PUBLIC_KEY_INFO_free(pubinfo);
     return ret > 0;
 }
 
@@ -188,12 +161,18 @@ MAKE_ENCODER_FUNCTIONS(gost2012_512, der, 0);
 MAKE_ENCODER_FUNCTIONS(gost2012_512, pem, 1);
 
 const OSSL_ALGORITHM GOST_prov_encoders[] = {
-    { "gost2001", "provider=gostprov,output=der", gost2001_der_encoder_functions },
-    { "gost2001", "provider=gostprov,output=pem", gost2001_pem_encoder_functions },
-    { "gost2012_256", "provider=gostprov,output=der", gost2012_256_der_encoder_functions },
-    { "gost2012_256", "provider=gostprov,output=pem", gost2012_256_pem_encoder_functions },
-    { "gost2012_512", "provider=gostprov,output=der", gost2012_512_der_encoder_functions },
-    { "gost2012_512", "provider=gostprov,output=pem", gost2012_512_pem_encoder_functions },
+    { "gost2001", "provider=gostprov,output=der,structure=PrivateKeyInfo", gost2001_der_encoder_functions },
+    { "gost2001", "provider=gostprov,output=pem,structure=PrivateKeyInfo", gost2001_pem_encoder_functions },
+    { "gost2001", "provider=gostprov,output=der,structure=SubjectPublicKeyInfo", gost2001_der_encoder_functions },
+    { "gost2001", "provider=gostprov,output=pem,structure=SubjectPublicKeyInfo", gost2001_pem_encoder_functions },
+    { "gost2012_256", "provider=gostprov,output=der,structure=PrivateKeyInfo", gost2012_256_der_encoder_functions },
+    { "gost2012_256", "provider=gostprov,output=pem,structure=PrivateKeyInfo", gost2012_256_pem_encoder_functions },
+    { "gost2012_256", "provider=gostprov,output=der,structure=SubjectPublicKeyInfo", gost2012_256_der_encoder_functions },
+    { "gost2012_256", "provider=gostprov,output=pem,structure=SubjectPublicKeyInfo", gost2012_256_pem_encoder_functions },
+    { "gost2012_512", "provider=gostprov,output=der,structure=PrivateKeyInfo", gost2012_512_der_encoder_functions },
+    { "gost2012_512", "provider=gostprov,output=pem,structure=PrivateKeyInfo", gost2012_512_pem_encoder_functions },
+    { "gost2012_512", "provider=gostprov,output=der,structure=SubjectPublicKeyInfo", gost2012_512_der_encoder_functions },
+    { "gost2012_512", "provider=gostprov,output=pem,structure=SubjectPublicKeyInfo", gost2012_512_pem_encoder_functions },
     { NULL, NULL, NULL }
 };
 
