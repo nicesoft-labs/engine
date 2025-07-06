@@ -4,6 +4,9 @@
 #include <openssl/params.h>
 #include <openssl/buffer.h>
 #include <openssl/x509.h>
+#include <openssl/pkcs12.h>
+#include <openssl/err.h>
+#include <openssl/proverr.h>
 #include <openssl/core_object.h>
 #include "gost_prov.h"
 #include "gost_lcl.h"
@@ -74,6 +77,10 @@ static const char *alg_nid2name(int nid)
     return NULL;
 }
 
+/*
+ * Parse AlgorithmIdentifier and extract algorithm and parameter OIDs.
+ * Returns 1 on success with *alg_nid and *param_nid set.
+ */
 static int parse_algor(const X509_ALGOR *algor, int *alg_nid, int *param_nid)
 {
     const ASN1_OBJECT *algobj = NULL;
@@ -87,16 +94,31 @@ static int parse_algor(const X509_ALGOR *algor, int *alg_nid, int *param_nid)
     X509_ALGOR_get0(&algobj, &ptype, (const void **)&pval, algor);
     if (algobj != NULL)
         *alg_nid = OBJ_obj2nid(algobj);
+    if (*alg_nid != NID_id_GostR3410_2001 &&
+        *alg_nid != NID_id_GostR3410_2012_256 &&
+        *alg_nid != NID_id_GostR3410_2012_512) {
+        ERR_raise_data(ERR_LIB_PROV, PROV_R_NOT_SUPPORTED,
+                       "unknown algorithm OID %s",
+                       OBJ_nid2sn(*alg_nid));
+        return 0;
+    }
     if (ptype != V_ASN1_SEQUENCE || pval == NULL)
         return 0;
 
     p = pval->data;
     gkp = d2i_GOST_KEY_PARAMS(NULL, &p, pval->length);
-    if (gkp == NULL)
+    if (gkp == NULL) {
+        ERR_raise(ERR_LIB_PROV, PROV_R_BAD_ENCODING);
         return 0;
+    }
     *param_nid = OBJ_obj2nid(gkp->key_params);
+    if (*param_nid == NID_undef) {
+        ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_CURVE);
+        GOST_KEY_PARAMS_free(gkp);
+        return 0;
+    }
     GOST_KEY_PARAMS_free(gkp);
-    return *param_nid != NID_undef;
+    return 1;
 }
 
 static int read_der_from_bio(GOST_DECODER_CTX *ctx, OSSL_CORE_BIO *cin,
@@ -109,32 +131,47 @@ static int read_der_from_bio(GOST_DECODER_CTX *ctx, OSSL_CORE_BIO *cin,
         return 0;
 
     if (ctx->ispem) {
-        char *header = NULL;
+        char *label = NULL;
 
-        ok = PEM_read_bio(in, pem_name, &header, der, der_len) > 0;
+        /* Read PEM block and obtain header */
+        ok = PEM_read_bio(in, &label, &header, der, der_len) > 0;
         OPENSSL_free(header);
+        if (!ok)
+            goto end;
+
+        /* Map recognised headers */
+        if (strcmp(label, PEM_STRING_PKCS8INF) == 0 ||
+            strcmp(label, PEM_STRING_PKCS8) == 0 ||
+            strcmp(label, PEM_STRING_PUBLIC) == 0) {
+            *pem_name = label;  /* pass header back */
+            label = NULL;       /* ownership transferred */
+        } else {
+            ERR_raise_data(ERR_LIB_PROV, PROV_R_BAD_ENCODING,
+                           "unknown PEM header %s", label);
+            ok = 0;
+        }
+        OPENSSL_free(label);
     } else {
-        unsigned char *buf = NULL;
-        size_t buflen = 0;
+        BIO *mem = BIO_new(BIO_s_mem());
         char tbuf[4096];
         size_t n;
 
-        while (BIO_read_ex(in, tbuf, sizeof(tbuf), &n)) {
-            unsigned char *tmp = OPENSSL_realloc(buf, buflen + n);
-            if (tmp == NULL) {
-                OPENSSL_free(buf);
-                buf = NULL;
-                goto end;
-            }
-            buf = tmp;
-            memcpy(buf + buflen, tbuf, n);
-            buflen += n;
-        }
-        if (buf == NULL)
+        if (mem == NULL)
             goto end;
-        *der = buf;
-        *der_len = (long)buflen;
-        ok = 1;
+        /* Stream input to a memory BIO to avoid realloc loops */
+        while (BIO_read_ex(in, tbuf, sizeof(tbuf), &n))
+            BIO_write(mem, tbuf, n);
+
+        {
+            char *tmpbuf = NULL;
+            long tmplen = BIO_get_mem_data(mem, &tmpbuf);
+            if (tmplen <= 0)
+                goto end;
+            *der = OPENSSL_memdup(tmpbuf, tmplen);
+            *der_len = tmplen;
+            ok = *der != NULL;
+            BIO_free(mem);
+        }
     }
  end:
     BIO_free(in);
@@ -174,13 +211,52 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
 
     p = der;
     if ((selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0 || selection == 0) {
+        /* First try plain PKCS#8 */
         priv = d2i_GOST_PRIVATE_KEY_INFO(NULL, &p, der_len);
-        if (priv != NULL
-            && parse_algor(priv->algor, &alg_nid, &param_nid)) {
+        if (priv == NULL) {
+            /* check for EncryptedPrivateKeyInfo */
+            X509_SIG *epki = NULL;
+            p = der;
+            epki = d2i_X509_SIG(NULL, &p, der_len);
+            if (epki != NULL) {
+                char pass[1024];
+                size_t passlen = 0;
+
+                if (cb == NULL ||
+                    cb(pass, sizeof(pass), &passlen, NULL, cbarg) <= 0) {
+                    ERR_raise(ERR_LIB_PROV, PROV_R_BAD_DECRYPT);
+                    X509_SIG_free(epki);
+                    goto end;
+                }
+                PKCS8_PRIV_KEY_INFO *p8inf =
+                    PKCS8_decrypt_ex(epki, pass, (int)passlen,
+                                     ctx->provctx->libctx, NULL);
+                OPENSSL_cleanse(pass, sizeof(pass));
+                X509_SIG_free(epki);
+                if (p8inf != NULL) {
+                    unsigned char *tmp = NULL;
+                    int tmplen = i2d_PKCS8_PRIV_KEY_INFO(p8inf, &tmp);
+                    const unsigned char *q = tmp;
+                    PKCS8_PRIV_KEY_INFO_free(p8inf);
+                    if (tmplen > 0) {
+                        priv = d2i_GOST_PRIVATE_KEY_INFO(NULL, &q, tmplen);
+                        OPENSSL_clear_free(tmp, tmplen);
+                    } else {
+                        OPENSSL_free(tmp);
+                    }
+                }
+                if (priv == NULL) {
+                    ERR_raise(ERR_LIB_PROV, PROV_R_BAD_DECRYPT);
+                    goto end;
+                }
+            }
+        }
+        if (priv != NULL && parse_algor(priv->algor, &alg_nid, &param_nid)) {
             unsigned char *privbuf = NULL;
             int i;
             int klen = priv->priv_key->length;
 
+            /* Private key bits are stored little-endian */
             privbuf = OPENSSL_malloc(klen);
             if (privbuf == NULL)
                 goto end;
@@ -198,8 +274,9 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
         && ((selection & OSSL_KEYMGMT_SELECT_PUBLIC_KEY) != 0 || selection == 0)) {
         p = der;
         pub = d2i_GOST_PUBLIC_KEY_INFO(NULL, &p, der_len);
-        if (pub != NULL
-            && parse_algor(pub->algor, &alg_nid, &param_nid)) {
+        if (pub != NULL &&
+            pub->pub_key != NULL && pub->pub_key->length > 0 &&
+            parse_algor(pub->algor, &alg_nid, &param_nid)) {
             params[pidx++] =
                 OSSL_PARAM_construct_octet_string(OSSL_PKEY_PARAM_PUB_KEY,
                                                   pub->pub_key->data,
@@ -208,12 +285,16 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
         }
     }
 
-    if (alg_nid == NID_undef || param_nid == NID_undef)
+    if (alg_nid == NID_undef || param_nid == NID_undef) {
+        ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_DATA);
         goto end;
+    }
 
     keytype = alg_nid2name(param_to_alg_nid(param_nid));
-    if (keytype == NULL)
+    if (keytype == NULL) {
+        ERR_raise(ERR_LIB_PROV, PROV_R_NOT_SUPPORTED);
         goto end;
+    }
 
     params[pidx++] = OSSL_PARAM_construct_utf8_string(OSSL_PKEY_PARAM_GROUP_NAME,
                                                       (char *)OBJ_nid2sn(param_nid),
@@ -247,6 +328,8 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
         gost_keymgmt_free(gctx);
     return ok;
 }
+
+/* Export callback for any decoded GOST key type */
 
 static int decoder_export_object(void *vctx,
                                  const void *reference, size_t reference_sz,
