@@ -11,6 +11,7 @@
 #include <openssl/x509.h>
 #include <openssl/pem.h>
 #include <openssl/ec.h>
+#include <openssl/proverr.h>
 #include "gost_lcl.h"
 #include "gost_asn1.h"
 
@@ -151,12 +152,20 @@ static X509_ALGOR *build_algor_from_param(int param_nid)
     int derlen = 0;
     int alg_nid = gost_param_nid_to_alg_nid(param_nid);
 
-    if (alg_nid == NID_undef)
-        return NULL;
+    fprintf(stderr, "build_algor_from_param: param_nid=%d alg_nid=%d\n",
+            param_nid, alg_nid);
 
+    if (alg_nid == NID_undef) {
+        fprintf(stderr, "build_algor_from_param: unknown param_nid %d\n",
+                param_nid);
+        return NULL;
+    }
+    
     gkp = GOST_KEY_PARAMS_new();
-    if (gkp == NULL)
+    if (gkp == NULL) {
+        ERR_raise(ERR_LIB_PROV, ERR_R_MALLOC_FAILURE);
         goto err;
+    }
     gkp->key_params = OBJ_nid2obj(param_nid);
     switch (alg_nid) {
     case NID_id_GostR3410_2012_256:
@@ -171,18 +180,24 @@ static X509_ALGOR *build_algor_from_param(int param_nid)
     }
 
     derlen = i2d_GOST_KEY_PARAMS(gkp, &der);
-    if (derlen <= 0)
+    if (derlen <= 0) {
+        ERR_raise(ERR_LIB_PROV, PROV_R_BAD_ENCODING);
         goto err;
+    }
 
     params = ASN1_STRING_type_new(V_ASN1_SEQUENCE);
-    if (params == NULL)
+    if (params == NULL) {
+        ERR_raise(ERR_LIB_PROV, ERR_R_MALLOC_FAILURE);
         goto err;
+    }
     ASN1_STRING_set0(params, der, derlen);
     der = NULL;
 
     alg = X509_ALGOR_new();
-    if (alg == NULL)
+    if (alg == NULL) {
+        ERR_raise(ERR_LIB_PROV, ERR_R_MALLOC_FAILURE);
         goto err;
+    }
     X509_ALGOR_set0(alg, OBJ_nid2obj(alg_nid), V_ASN1_SEQUENCE, params);
     params = NULL;
 
@@ -210,22 +225,34 @@ GOST_PRIVATE_KEY_INFO *gost_priv_key_info_from_ec(const EC_KEY *ec,
         return NULL;
 
     info = GOST_PRIVATE_KEY_INFO_new();
-    if (info == NULL)
+    if (info == NULL) {
+        ERR_raise(ERR_LIB_PROV, ERR_R_MALLOC_FAILURE);
         goto err;
+    }
 
     info->algor = build_algor_from_param(param_nid);
-    if (info->algor == NULL)
+    if (info->algor == NULL) {
+        fprintf(stderr, "gost_priv_key_info_from_ec: build_algor_from_param returned NULL param_nid=%d\n",
+                param_nid);
+        ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_CURVE);
         goto err;
+    }
 
     buflen = (EC_GROUP_get_degree(group) + 7) / 8;
     buf = OPENSSL_malloc(buflen);
-    if (buf == NULL)
+    if (buf == NULL) {
+        ERR_raise(ERR_LIB_PROV, ERR_R_MALLOC_FAILURE);
         goto err;
-    if (BN_bn2lebinpad(priv, buf, buflen) < 0)
+    }
+    if (BN_bn2lebinpad(priv, buf, buflen) < 0) {
+        ERR_raise(ERR_LIB_PROV, ERR_R_INTERNAL_ERROR);
         goto err;
+    }
 
-    if (!ASN1_OCTET_STRING_set(info->priv_key, buf, buflen))
+    if (!ASN1_OCTET_STRING_set(info->priv_key, buf, buflen)) {
+        ERR_raise(ERR_LIB_PROV, ERR_R_ASN1_LIB);
         goto err;
+    }
 
     OPENSSL_free(buf);
     return info;
@@ -252,19 +279,29 @@ GOST_PUBLIC_KEY_INFO *gost_pub_key_info_from_ec(const EC_KEY *ec,
         return NULL;
 
     info = GOST_PUBLIC_KEY_INFO_new();
-    if (info == NULL)
+    if (info == NULL) {
+        ERR_raise(ERR_LIB_PROV, ERR_R_MALLOC_FAILURE);
         goto err;
+    }
 
     info->algor = build_algor_from_param(param_nid);
-    if (info->algor == NULL)
+    if (info->algor == NULL) {
+        fprintf(stderr, "gost_pub_key_info_from_ec: build_algor_from_param returned NULL param_nid=%d\n",
+                param_nid);
+        ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_CURVE);
         goto err;
+    }
 
     buflen = EC_POINT_point2buf(group, point, POINT_CONVERSION_UNCOMPRESSED,
                                 &buf, NULL);
-    if (buflen == 0)
+    if (buflen == 0) {
+        ERR_raise(ERR_LIB_PROV, ERR_R_EC_LIB);
         goto err;
-    if (!ASN1_BIT_STRING_set(info->pub_key, buf, (int)buflen))
+    }
+    if (!ASN1_BIT_STRING_set(info->pub_key, buf, (int)buflen)) {
+        ERR_raise(ERR_LIB_PROV, ERR_R_ASN1_LIB);
         goto err;
+    }
 
     OPENSSL_free(buf);
     return info;
