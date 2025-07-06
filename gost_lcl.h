@@ -407,6 +407,7 @@ extern const OSSL_ALGORITHM GOST_prov_digests[];
 void GOST_prov_deinit_digests(void);
 extern const OSSL_ALGORITHM GOST_prov_keymgmts[];
 extern const OSSL_ALGORITHM GOST_prov_encoders[];
+extern const OSSL_ALGORITHM GOST_prov_decoders[];
 
 
 typedef struct gost_keymgmt_ctx_st {
@@ -414,6 +415,13 @@ typedef struct gost_keymgmt_ctx_st {
     int param_nid;
     EC_KEY *ec;
 } GOST_KEYMGMT_CTX;
+
+void *gost_keymgmt_new(void *provctx);
+void gost_keymgmt_free(void *vctx);
+int gost_import(void *keydata, int selection, const OSSL_PARAM params[]);
+int gost_export(void *keydata, int selection,
+                OSSL_CALLBACK *param_cb, void *cbarg);
+
 
 /* job to initialize a missing NID */
 struct gost_nid_job {
