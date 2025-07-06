@@ -3,6 +3,8 @@ project(gost-engine LANGUAGES C)
 
 option(WITH_ENGINE "Build legacy engine" ON)
 option(WITH_GOSTSUM "Build gostsum utilities" ON)
+option(ENABLE_GOST_DEBUG "Enable provider debug logging" OFF)
+
 
 include(GNUInstallDirs)
 include(CheckLibraryExists)
@@ -52,6 +54,9 @@ if (ASAN)
 endif()
 
 set(CMAKE_C_STANDARD 90)
+if(ENABLE_GOST_DEBUG)
+  add_definitions(-DENABLE_GOST_DEBUG)
+endif()
 CHECK_FUNCTION_EXISTS(clock_gettime HAVE_CLOCK_GETTIME_C)
 CHECK_LIBRARY_EXISTS(rt clock_gettime "" HAVE_CLOCK_GETTIME_RT)
 if(HAVE_CLOCK_GETTIME_RT AND NOT HAVE_CLOCK_GETTIME_C)
