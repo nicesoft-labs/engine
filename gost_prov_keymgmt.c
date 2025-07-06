@@ -263,7 +263,7 @@ int gost_export(void *keydata, int selection,
             || !OSSL_PARAM_BLD_push_octet_string(bld, OSSL_PKEY_PARAM_PRIV_KEY,
                                                  privbuf, privlen))
             goto err;
-            DEBUG_LOG("gost_export: privlen=%zu", privlen);
+        DEBUG_LOG("gost_export: privlen=%zu", privlen);
     }
     if ((selection & OSSL_KEYMGMT_SELECT_PUBLIC_KEY) && pub != NULL) {
         publen = EC_POINT_point2buf(group, pub,
