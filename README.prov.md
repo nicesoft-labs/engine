@@ -3,6 +3,12 @@
 The GOST provider is currently built in parallell with the GOST
 engine, and is implemented like a wrapper around the engine code.
 
+### Build options
+
+`ENABLE_GOST_DEBUG` can be set to `ON` to enable debug output from the
+provider.  When enabled, calls to the `DEBUG_LOG` macro will print
+messages on `stderr` during execution.
+
 ## Currently implemented
 
 Symmetric ciphers:
