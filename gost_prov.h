@@ -28,9 +28,11 @@ struct provider_ctx_st {
 };
 typedef struct provider_ctx_st PROV_CTX;
 
-#ifdef DEBUG
-# define DEBUG_LOG(fmt, ...) \
-    ERR_raise_data(ERR_LIB_PROV, 0, fmt, ##__VA_ARGS__)
+#ifdef ENABLE_GOST_DEBUG
+# include <stdio.h>
+# define DEBUG_LOG(fmt, ...) do { \
+        fprintf(stderr, fmt "\n", ##__VA_ARGS__); \
+    } while (0)
 #else
 # define DEBUG_LOG(fmt, ...) ((void)0)
 #endif
