@@ -7,12 +7,14 @@
  *          Requires OpenSSL 0.9.9 for compilation                    *
  **********************************************************************/
 #include <stdio.h>
+#include <openssl/err.h>
 #include <openssl/asn1t.h>
 #include <openssl/x509.h>
 #include <openssl/pem.h>
 #include <openssl/ec.h>
 #include <openssl/proverr.h>
 #include "gost_lcl.h"
+#include "gost_prov.h"
 #include "gost_asn1.h"
 
 ASN1_NDEF_SEQUENCE(GOST_KEY_TRANSPORT) = {
@@ -152,12 +154,11 @@ static X509_ALGOR *build_algor_from_param(int param_nid)
     int derlen = 0;
     int alg_nid = gost_param_nid_to_alg_nid(param_nid);
 
-    fprintf(stderr, "build_algor_from_param: param_nid=%d alg_nid=%d\n",
-            param_nid, alg_nid);
+    DEBUG_LOG("build_algor_from_param: param_nid=%d alg_nid=%d",
+              param_nid, alg_nid);
 
     if (alg_nid == NID_undef) {
-        fprintf(stderr, "build_algor_from_param: unknown param_nid %d\n",
-                param_nid);
+        DEBUG_LOG("build_algor_from_param: unknown param_nid %d", param_nid);
         return NULL;
     }
     
@@ -232,8 +233,8 @@ GOST_PRIVATE_KEY_INFO *gost_priv_key_info_from_ec(const EC_KEY *ec,
 
     info->algor = build_algor_from_param(param_nid);
     if (info->algor == NULL) {
-        fprintf(stderr, "gost_priv_key_info_from_ec: build_algor_from_param returned NULL param_nid=%d\n",
-                param_nid);
+        DEBUG_LOG("gost_priv_key_info_from_ec: build_algor_from_param returned NULL param_nid=%d",
+                  param_nid);
         ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_CURVE);
         goto err;
     }
@@ -286,8 +287,8 @@ GOST_PUBLIC_KEY_INFO *gost_pub_key_info_from_ec(const EC_KEY *ec,
 
     info->algor = build_algor_from_param(param_nid);
     if (info->algor == NULL) {
-        fprintf(stderr, "gost_pub_key_info_from_ec: build_algor_from_param returned NULL param_nid=%d\n",
-                param_nid);
+        DEBUG_LOG("gost_pub_key_info_from_ec: build_algor_from_param returned NULL param_nid=%d",
+                  param_nid);
         ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_CURVE);
         goto err;
     }
