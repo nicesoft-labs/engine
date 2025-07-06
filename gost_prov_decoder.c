@@ -132,6 +132,7 @@ static int read_der_from_bio(GOST_DECODER_CTX *ctx, OSSL_CORE_BIO *cin,
 
     if (ctx->ispem) {
         char *label = NULL;
+        char *header = NULL;
 
         /* Read PEM block and obtain header */
         ok = PEM_read_bio(in, &label, &header, der, der_len) > 0;
@@ -354,10 +355,13 @@ static int decoder_export_object(void *vctx,
 
 static int decoder_does_selection(void *provctx, int selection)
 {
-    if ((selection & (OSSL_KEYMGMT_SELECT_PRIVATE_KEY |
-                      OSSL_KEYMGMT_SELECT_PUBLIC_KEY)) != 0)
+    int allowed = OSSL_KEYMGMT_SELECT_PRIVATE_KEY | OSSL_KEYMGMT_SELECT_PUBLIC_KEY;
+
+    if (selection == 0)
         return 1;
-    return 0;
+    if ((selection & ~allowed) != 0)
+        return 0;
+    return (selection & allowed) != 0;
 }
 
 static int decoder_parameters(OSSL_PARAM params[])
