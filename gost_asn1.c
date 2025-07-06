@@ -9,6 +9,8 @@
 #include <stdio.h>
 #include <openssl/asn1t.h>
 #include <openssl/x509.h>
+#include <openssl/pem.h>
+#include <openssl/ec.h>
 #include "gost_lcl.h"
 #include "gost_asn1.h"
 
@@ -89,5 +91,188 @@ ASN1_SEQUENCE(GOST_PUBLIC_KEY_INFO) = {
     ASN1_SIMPLE(GOST_PUBLIC_KEY_INFO, pub_key, ASN1_BIT_STRING)
 } ASN1_SEQUENCE_END(GOST_PUBLIC_KEY_INFO)
 IMPLEMENT_ASN1_FUNCTIONS(GOST_PUBLIC_KEY_INFO)
+
+int i2d_GOST_PRIVATE_KEY_INFO_bio(BIO *out, const GOST_PRIVATE_KEY_INFO *a)
+{
+    return ASN1_item_i2d_bio(ASN1_ITEM_rptr(GOST_PRIVATE_KEY_INFO), out, a);
+}
+
+int i2d_GOST_PUBLIC_KEY_INFO_bio(BIO *out, const GOST_PUBLIC_KEY_INFO *a)
+{
+    return ASN1_item_i2d_bio(ASN1_ITEM_rptr(GOST_PUBLIC_KEY_INFO), out, a);
+}
+
+int PEM_write_bio_GOST_PRIVATE_KEY_INFO(BIO *bp, const GOST_PRIVATE_KEY_INFO *x)
+{
+    return PEM_ASN1_write_bio((i2d_of_void *)i2d_GOST_PRIVATE_KEY_INFO,
+                              PEM_STRING_PKCS8INF, bp, (void *)x,
+                              NULL, NULL, 0, NULL, NULL);
+}
+
+int PEM_write_bio_GOST_PUBLIC_KEY_INFO(BIO *bp, const GOST_PUBLIC_KEY_INFO *x)
+{
+    return PEM_ASN1_write_bio((i2d_of_void *)i2d_GOST_PUBLIC_KEY_INFO,
+                              PEM_STRING_PUBLIC, bp, (void *)x,
+                              NULL, NULL, 0, NULL, NULL);
+}
+
+
+int gost_param_nid_to_alg_nid(int param_nid)
+{
+    switch (param_nid) {
+    case NID_id_GostR3410_2001_CryptoPro_A_ParamSet:
+    case NID_id_GostR3410_2001_CryptoPro_B_ParamSet:
+    case NID_id_GostR3410_2001_CryptoPro_C_ParamSet:
+    case NID_id_GostR3410_2001_TestParamSet:
+    case NID_id_GostR3410_2001_CryptoPro_XchA_ParamSet:
+    case NID_id_GostR3410_2001_CryptoPro_XchB_ParamSet:
+        return NID_id_GostR3410_2001;
+
+    case NID_id_tc26_gost_3410_2012_256_paramSetA:
+    case NID_id_tc26_gost_3410_2012_256_paramSetB:
+    case NID_id_tc26_gost_3410_2012_256_paramSetC:
+    case NID_id_tc26_gost_3410_2012_256_paramSetD:
+        return NID_id_GostR3410_2012_256;
+
+    case NID_id_tc26_gost_3410_2012_512_paramSetA:
+    case NID_id_tc26_gost_3410_2012_512_paramSetB:
+    case NID_id_tc26_gost_3410_2012_512_paramSetC:
+        return NID_id_GostR3410_2012_512;
+    }
+    return NID_undef;
+}
+
+static X509_ALGOR *build_algor_from_param(int param_nid)
+{
+    X509_ALGOR *alg = NULL;
+    ASN1_STRING *params = NULL;
+    GOST_KEY_PARAMS *gkp = NULL;
+    unsigned char *der = NULL;
+    int derlen = 0;
+    int alg_nid = gost_param_nid_to_alg_nid(param_nid);
+
+    if (alg_nid == NID_undef)
+        return NULL;
+
+    gkp = GOST_KEY_PARAMS_new();
+    if (gkp == NULL)
+        goto err;
+    gkp->key_params = OBJ_nid2obj(param_nid);
+    switch (alg_nid) {
+    case NID_id_GostR3410_2012_256:
+        gkp->hash_params = OBJ_nid2obj(NID_id_GostR3411_2012_256);
+        break;
+    case NID_id_GostR3410_2012_512:
+        gkp->hash_params = OBJ_nid2obj(NID_id_GostR3411_2012_512);
+        break;
+    case NID_id_GostR3410_2001:
+        gkp->hash_params = OBJ_nid2obj(NID_id_GostR3411_94_CryptoProParamSet);
+        break;
+    }
+
+    derlen = i2d_GOST_KEY_PARAMS(gkp, &der);
+    if (derlen <= 0)
+        goto err;
+
+    params = ASN1_STRING_type_new(V_ASN1_SEQUENCE);
+    if (params == NULL)
+        goto err;
+    ASN1_STRING_set0(params, der, derlen);
+    der = NULL;
+
+    alg = X509_ALGOR_new();
+    if (alg == NULL)
+        goto err;
+    X509_ALGOR_set0(alg, OBJ_nid2obj(alg_nid), V_ASN1_SEQUENCE, params);
+    params = NULL;
+
+ err:
+    GOST_KEY_PARAMS_free(gkp);
+    ASN1_STRING_free(params);
+    OPENSSL_free(der);
+    return alg;
+}
+
+GOST_PRIVATE_KEY_INFO *gost_priv_key_info_from_ec(const EC_KEY *ec,
+                                                  int param_nid)
+{
+    const EC_GROUP *group;
+    const BIGNUM *priv;
+    GOST_PRIVATE_KEY_INFO *info = NULL;
+    unsigned char *buf = NULL;
+    int buflen = 0;
+
+    if (ec == NULL)
+        return NULL;
+    group = EC_KEY_get0_group(ec);
+    priv = EC_KEY_get0_private_key(ec);
+    if (group == NULL || priv == NULL)
+        return NULL;
+
+    info = GOST_PRIVATE_KEY_INFO_new();
+    if (info == NULL)
+        goto err;
+
+    info->algor = build_algor_from_param(param_nid);
+    if (info->algor == NULL)
+        goto err;
+
+    buflen = (EC_GROUP_get_degree(group) + 7) / 8;
+    buf = OPENSSL_malloc(buflen);
+    if (buf == NULL)
+        goto err;
+    if (BN_bn2lebinpad(priv, buf, buflen) < 0)
+        goto err;
+
+    if (!ASN1_OCTET_STRING_set(info->priv_key, buf, buflen))
+        goto err;
+
+    OPENSSL_free(buf);
+    return info;
+ err:
+    OPENSSL_free(buf);
+    GOST_PRIVATE_KEY_INFO_free(info);
+    return NULL;
+}
+
+GOST_PUBLIC_KEY_INFO *gost_pub_key_info_from_ec(const EC_KEY *ec,
+                                                int param_nid)
+{
+    const EC_GROUP *group;
+    const EC_POINT *point;
+    unsigned char *buf = NULL;
+    size_t buflen = 0;
+    GOST_PUBLIC_KEY_INFO *info = NULL;
+
+    if (ec == NULL)
+        return NULL;
+    group = EC_KEY_get0_group(ec);
+    point = EC_KEY_get0_public_key(ec);
+    if (group == NULL || point == NULL)
+        return NULL;
+
+    info = GOST_PUBLIC_KEY_INFO_new();
+    if (info == NULL)
+        goto err;
+
+    info->algor = build_algor_from_param(param_nid);
+    if (info->algor == NULL)
+        goto err;
+
+    buflen = EC_POINT_point2buf(group, point, POINT_CONVERSION_UNCOMPRESSED,
+                                &buf, NULL);
+    if (buflen == 0)
+        goto err;
+    if (!ASN1_BIT_STRING_set(info->pub_key, buf, (int)buflen))
+        goto err;
+
+    OPENSSL_free(buf);
+    return info;
+ err:
+    OPENSSL_free(buf);
+    GOST_PUBLIC_KEY_INFO_free(info);
+    return NULL;
+}
+
 
 
