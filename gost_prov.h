@@ -9,6 +9,8 @@
 
 #include <openssl/core.h>
 #include <openssl/engine.h>
+#include <openssl/err.h>
+
 
 struct provider_ctx_st {
     OSSL_LIB_CTX *libctx;
@@ -25,3 +27,10 @@ struct provider_ctx_st {
     ENGINE *e;
 };
 typedef struct provider_ctx_st PROV_CTX;
+
+#ifdef DEBUG
+# define DEBUG_LOG(fmt, ...) \
+    ERR_raise_data(ERR_LIB_PROV, 0, fmt, ##__VA_ARGS__)
+#else
+# define DEBUG_LOG(fmt, ...) ((void)0)
+#endif
