@@ -55,12 +55,16 @@ static int encoder_encode(void *vctx, OSSL_CORE_BIO *cout, const void *obj,
         return 0;
 
     out = BIO_new_from_core_bio(ctx->provctx->libctx, cout);
-    if (out == NULL)
+    if (out == NULL) {
+        fprintf(stderr, "BIO_new_from_core_bio returned NULL\n");
+        ERR_raise(ERR_LIB_PROV, ERR_R_MALLOC_FAILURE);
         goto end;
+    }
 
     if ((selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0 &&
         EC_KEY_get0_private_key(gctx->ec) != NULL) {
-        if (ctx->ispem)
+            fprintf(stderr, "call gost_priv_key_info_from_ec param_nid=%d\n",
+                    gctx->param_nid);
         privinfo = gost_priv_key_info_from_ec(gctx->ec, gctx->param_nid);
         if (privinfo != NULL) {
             if (ctx->ispem)
@@ -70,6 +74,8 @@ static int encoder_encode(void *vctx, OSSL_CORE_BIO *cout, const void *obj,
         }
     } else if ((selection & OSSL_KEYMGMT_SELECT_PUBLIC_KEY) != 0 &&
                EC_KEY_get0_public_key(gctx->ec) != NULL) {
+        fprintf(stderr, "call gost_pub_key_info_from_ec param_nid=%d\n",
+                gctx->param_nid);
         pubinfo = gost_pub_key_info_from_ec(gctx->ec, gctx->param_nid);
         if (pubinfo != NULL) {
             if (ctx->ispem)
