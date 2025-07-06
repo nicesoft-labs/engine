@@ -331,6 +331,13 @@ add_test(NAME keymgmt-with-provider COMMAND test_keymgmt)
 set_tests_properties(keymgmt-with-provider
   PROPERTIES ENVIRONMENT "${TEST_ENVIRONMENT_PROVIDER}")
 
+add_executable(test_encoder_decoder test_encoder_decoder.c)
+target_link_libraries(test_encoder_decoder OpenSSL::Crypto)
+add_test(NAME encoder-decoder-with-provider COMMAND test_encoder_decoder)
+set_tests_properties(encoder-decoder-with-provider
+  PROPERTIES ENVIRONMENT "${TEST_ENVIRONMENT_PROVIDER}")
+
+
 if(NOT SKIP_PERL_TESTS)
     execute_process(COMMAND perl -MTest2::V0 -e ""
        ERROR_QUIET RESULT_VARIABLE MISSING_TEST2_V0)
@@ -365,6 +372,7 @@ set(BINARY_TESTS_TARGETS
         test_context
         test_keyexpimp
         test_keymgmt
+        test_encoder_decoder
         test_gost89
         test_tls
         test_mgm
