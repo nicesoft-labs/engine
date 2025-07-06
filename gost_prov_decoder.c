@@ -205,6 +205,8 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
     int ok = 0;
     int sel = 0;
 
+    DEBUG_LOG("decoder_decode: selection=%d", selection);
+
     (void)cb;
     (void)cbarg;
 
@@ -391,22 +393,22 @@ static int decoder_get_params_generic(OSSL_PARAM params[],
 
 static int decoder_get_params_der_priv(OSSL_PARAM params[])
 {
-    return decoder_get_params_generic(params, "DER", "PrivateKeyInfo");
+    return decoder_get_params_generic(params, "der", "PrivateKeyInfo");
 }
 
 static int decoder_get_params_pem_priv(OSSL_PARAM params[])
 {
-    return decoder_get_params_generic(params, "PEM", "PrivateKeyInfo");
+    return decoder_get_params_generic(params, "pem", "PrivateKeyInfo");
 }
 
 static int decoder_get_params_der_pub(OSSL_PARAM params[])
 {
-    return decoder_get_params_generic(params, "DER", "SubjectPublicKeyInfo");
+    return decoder_get_params_generic(params, "der", "SubjectPublicKeyInfo");
 }
 
 static int decoder_get_params_pem_pub(OSSL_PARAM params[])
 {
-    return decoder_get_params_generic(params, "PEM", "SubjectPublicKeyInfo");
+    return decoder_get_params_generic(params, "pem", "SubjectPublicKeyInfo");
 }
 
 
