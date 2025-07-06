@@ -64,7 +64,11 @@ int main(void)
             T(EVP_PKEY_eq(key, kder));
             ctx = EVP_PKEY_CTX_new_from_pkey(NULL, kder, NULL);
             T(ctx != NULL);
-            T(EVP_PKEY_check(ctx) > 0);
+            if (selection == OSSL_KEYMGMT_SELECT_PUBLIC_KEY) {
+                T(EVP_PKEY_public_check(ctx) > 0);
+            } else {
+                T(EVP_PKEY_check(ctx) > 0);
+            }
             EVP_PKEY_CTX_free(ctx);
             ctx = NULL;
 
@@ -85,7 +89,11 @@ int main(void)
             T(EVP_PKEY_eq(key, kpem));
             ctx = EVP_PKEY_CTX_new_from_pkey(NULL, kpem, NULL);
             T(ctx != NULL);
-            T(EVP_PKEY_check(ctx) > 0);
+            if (selection == OSSL_KEYMGMT_SELECT_PUBLIC_KEY) {
+                T(EVP_PKEY_public_check(ctx) > 0);
+            } else {
+                T(EVP_PKEY_check(ctx) > 0);
+            }
             EVP_PKEY_CTX_free(ctx);
             ctx = NULL;
             EVP_PKEY_free(kpem);
