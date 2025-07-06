@@ -10,7 +10,7 @@
 
 /* Key management context */
 
-static void *gost_keymgmt_new(void *provctx)
+void *gost_keymgmt_new(void *provctx)
 {
     GOST_KEYMGMT_CTX *ctx = OPENSSL_zalloc(sizeof(*ctx));
 
@@ -19,7 +19,7 @@ static void *gost_keymgmt_new(void *provctx)
     return ctx;
 }
 
-static void gost_keymgmt_free(void *vctx)
+void gost_keymgmt_free(void *vctx)
 {
     GOST_KEYMGMT_CTX *ctx = vctx;
 
@@ -207,7 +207,7 @@ static int gost_get_params(void *key, OSSL_PARAM params[])
     return 1;
 }
 
-static int gost_export(void *keydata, int selection,
+int gost_export(void *keydata, int selection,
                        OSSL_CALLBACK *param_cb, void *cbarg)
 {
     GOST_KEYMGMT_CTX *ctx = keydata;
@@ -268,7 +268,7 @@ static int gost_export(void *keydata, int selection,
     return ok;
 }
 
-static int gost_import(void *keydata, int selection, const OSSL_PARAM params[])
+int gost_import(void *keydata, int selection, const OSSL_PARAM params[])
 {
     GOST_KEYMGMT_CTX *ctx = keydata;
     EC_KEY *ec = ctx->ec;
