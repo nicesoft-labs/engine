@@ -12,6 +12,13 @@
 #include "gost_lcl.h"
 #include "gost_asn1.h"
 
+#ifndef OSSL_DECODER_PARAM_INPUT_TYPE
+# define OSSL_DECODER_PARAM_INPUT_TYPE "input-type"
+#endif
+#ifndef OSSL_DECODER_PARAM_STRUCTURE
+# define OSSL_DECODER_PARAM_STRUCTURE "structure"
+#endif
+
 /*
  * Very small and simplified DECODER implementation.  This is
  * currently just enough to import a PKCS#8 or SubjectPublicKeyInfo
@@ -364,45 +371,96 @@ static int decoder_does_selection(void *provctx, int selection)
     return (selection & allowed) != 0;
 }
 
-static int decoder_parameters(OSSL_PARAM params[])
+static int decoder_get_params_generic(OSSL_PARAM params[],
+                                      const char *input_type,
+                                      const char *structure)
 {
-    (void)params;
+    OSSL_PARAM *p;
+
+    DEBUG_LOG("decoder_get_params: input=%s structure=%s", input_type, structure);
+
+    p = OSSL_PARAM_locate(params, OSSL_DECODER_PARAM_INPUT_TYPE);
+    if (p != NULL && !OSSL_PARAM_set_utf8_string(p, input_type))
+        return 0;
+
+    p = OSSL_PARAM_locate(params, OSSL_DECODER_PARAM_STRUCTURE);
+    if (p != NULL && !OSSL_PARAM_set_utf8_string(p, structure))
+        return 0;
     return 1;
 }
 
+static int decoder_get_params_der_priv(OSSL_PARAM params[])
+{
+    return decoder_get_params_generic(params, "DER", "PrivateKeyInfo");
+}
+
+static int decoder_get_params_pem_priv(OSSL_PARAM params[])
+{
+    return decoder_get_params_generic(params, "PEM", "PrivateKeyInfo");
+}
+
+static int decoder_get_params_der_pub(OSSL_PARAM params[])
+{
+    return decoder_get_params_generic(params, "DER", "SubjectPublicKeyInfo");
+}
+
+static int decoder_get_params_pem_pub(OSSL_PARAM params[])
+{
+    return decoder_get_params_generic(params, "PEM", "SubjectPublicKeyInfo");
+}
+
+
 typedef void (*fptr_t)(void);
 
-#define MAKE_DECODER_FUNCTIONS(alg, fmt, ispemflag)                        \
-    static void *alg##_##fmt##_decoder_newctx(void *provctx)               \
+#define MAKE_DECODER_FUNCTIONS(alg, fmt, ispemflag, suffix)                 \
+    static void *alg##_##fmt##_##suffix##_decoder_newctx(void *provctx)    \
     {                                                                      \
         GOST_DECODER_CTX *ctx = decoder_newctx(provctx);                   \
         if (ctx != NULL)                                                   \
             ctx->ispem = ispemflag;                                        \
         return ctx;                                                        \
     }                                                                      \
-    static const OSSL_DISPATCH alg##_##fmt##_decoder_functions[] = {       \
-        { OSSL_FUNC_DECODER_NEWCTX, (fptr_t)alg##_##fmt##_decoder_newctx },\
+    static const OSSL_DISPATCH alg##_##fmt##_##suffix##_decoder_functions[] = { \
+        { OSSL_FUNC_DECODER_NEWCTX,                                         \
+          (fptr_t)alg##_##fmt##_##suffix##_decoder_newctx },                \
         { OSSL_FUNC_DECODER_FREECTX, (fptr_t)decoder_freectx },             \
-        { OSSL_FUNC_DECODER_DECODE, (fptr_t)decoder_decode },              \
-        { OSSL_FUNC_DECODER_EXPORT_OBJECT, (fptr_t)decoder_export_object },\
+        { OSSL_FUNC_DECODER_DECODE, (fptr_t)decoder_decode },               \
+        { OSSL_FUNC_DECODER_EXPORT_OBJECT, (fptr_t)decoder_export_object }, \
         { OSSL_FUNC_DECODER_DOES_SELECTION, (fptr_t)decoder_does_selection },\
-        { OSSL_FUNC_DECODER_GET_PARAMS, (fptr_t)decoder_parameters },       \
+        { OSSL_FUNC_DECODER_GET_PARAMS,                                     \
+          (fptr_t)decoder_get_params_##fmt##_##suffix },                    \
         { 0, NULL }                                                        \
     }
 
-MAKE_DECODER_FUNCTIONS(gost2001, der, 0);
-MAKE_DECODER_FUNCTIONS(gost2001, pem, 1);
-MAKE_DECODER_FUNCTIONS(gost2012_256, der, 0);
-MAKE_DECODER_FUNCTIONS(gost2012_256, pem, 1);
-MAKE_DECODER_FUNCTIONS(gost2012_512, der, 0);
-MAKE_DECODER_FUNCTIONS(gost2012_512, pem, 1);
+MAKE_DECODER_FUNCTIONS(gost2001, der, 0, priv);
+MAKE_DECODER_FUNCTIONS(gost2001, pem, 1, priv);
+MAKE_DECODER_FUNCTIONS(gost2001, der, 0, pub);
+MAKE_DECODER_FUNCTIONS(gost2001, pem, 1, pub);
+
+MAKE_DECODER_FUNCTIONS(gost2012_256, der, 0, priv);
+MAKE_DECODER_FUNCTIONS(gost2012_256, pem, 1, priv);
+MAKE_DECODER_FUNCTIONS(gost2012_256, der, 0, pub);
+MAKE_DECODER_FUNCTIONS(gost2012_256, pem, 1, pub);
+
+MAKE_DECODER_FUNCTIONS(gost2012_512, der, 0, priv);
+MAKE_DECODER_FUNCTIONS(gost2012_512, pem, 1, priv);
+MAKE_DECODER_FUNCTIONS(gost2012_512, der, 0, pub);
+MAKE_DECODER_FUNCTIONS(gost2012_512, pem, 1, pub);
 
 const OSSL_ALGORITHM GOST_prov_decoders[] = {
-    { "gost2001", "provider=gostprov,input=der", gost2001_der_decoder_functions },
-    { "gost2001", "provider=gostprov,input=pem", gost2001_pem_decoder_functions },
-    { "gost2012_256", "provider=gostprov,input=der", gost2012_256_der_decoder_functions },
-    { "gost2012_256", "provider=gostprov,input=pem", gost2012_256_pem_decoder_functions },
-    { "gost2012_512", "provider=gostprov,input=der", gost2012_512_der_decoder_functions },
-    { "gost2012_512", "provider=gostprov,input=pem", gost2012_512_pem_decoder_functions },
+    { "gost2001", "provider=gostprov,input=der,structure=PrivateKeyInfo", gost2001_der_priv_decoder_functions },
+    { "gost2001", "provider=gostprov,input=pem,structure=PrivateKeyInfo", gost2001_pem_priv_decoder_functions },
+    { "gost2001", "provider=gostprov,input=der,structure=SubjectPublicKeyInfo", gost2001_der_pub_decoder_functions },
+    { "gost2001", "provider=gostprov,input=pem,structure=SubjectPublicKeyInfo", gost2001_pem_pub_decoder_functions },
+
+    { "gost2012_256", "provider=gostprov,input=der,structure=PrivateKeyInfo", gost2012_256_der_priv_decoder_functions },
+    { "gost2012_256", "provider=gostprov,input=pem,structure=PrivateKeyInfo", gost2012_256_pem_priv_decoder_functions },
+    { "gost2012_256", "provider=gostprov,input=der,structure=SubjectPublicKeyInfo", gost2012_256_der_pub_decoder_functions },
+    { "gost2012_256", "provider=gostprov,input=pem,structure=SubjectPublicKeyInfo", gost2012_256_pem_pub_decoder_functions },
+
+    { "gost2012_512", "provider=gostprov,input=der,structure=PrivateKeyInfo", gost2012_512_der_priv_decoder_functions },
+    { "gost2012_512", "provider=gostprov,input=pem,structure=PrivateKeyInfo", gost2012_512_pem_priv_decoder_functions },
+    { "gost2012_512", "provider=gostprov,input=der,structure=SubjectPublicKeyInfo", gost2012_512_der_pub_decoder_functions },
+    { "gost2012_512", "provider=gostprov,input=pem,structure=SubjectPublicKeyInfo", gost2012_512_pem_pub_decoder_functions },
     { NULL, NULL, NULL }
 };
