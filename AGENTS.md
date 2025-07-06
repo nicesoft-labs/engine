@@ -1,7 +1,6 @@
-для сборки запустить это
+для сборки запустить это:
 git submodule update --init
-mkdir build
-cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
-cmake --build . --config Release
-дополнительно устанавливая gbd и strace для отладки
+mkdir build && cd build
+cmake ..
+cmake --build .
+дополнительно установить gbd и strace для отладки
