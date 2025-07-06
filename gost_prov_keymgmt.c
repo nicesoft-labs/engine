@@ -261,8 +261,9 @@ int gost_export(void *keydata, int selection,
         if (privbuf == NULL
             || BN_bn2binpad(priv, privbuf, privlen) < 0
             || !OSSL_PARAM_BLD_push_octet_string(bld, OSSL_PKEY_PARAM_PRIV_KEY,
-                                                 privbuf, privlen))
+                                                 privbuf, privlen)) {
             goto err;
+        }
         DEBUG_LOG("gost_export: privlen=%zu", privlen);
     }
     if ((selection & OSSL_KEYMGMT_SELECT_PUBLIC_KEY) && pub != NULL) {
