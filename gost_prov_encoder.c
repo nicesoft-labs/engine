@@ -185,12 +185,12 @@ MAKE_ENCODER_FUNCTIONS(gost2012_512, der, 0);
 MAKE_ENCODER_FUNCTIONS(gost2012_512, pem, 1);
 
 const OSSL_ALGORITHM GOST_prov_encoders[] = {
-    { "gost2001:DER", "provider=gostprov", gost2001_der_encoder_functions },
-    { "gost2001:PEM", "provider=gostprov", gost2001_pem_encoder_functions },
-    { "gost2012_256:DER", "provider=gostprov", gost2012_256_der_encoder_functions },
-    { "gost2012_256:PEM", "provider=gostprov", gost2012_256_pem_encoder_functions },
-    { "gost2012_512:DER", "provider=gostprov", gost2012_512_der_encoder_functions },
-    { "gost2012_512:PEM", "provider=gostprov", gost2012_512_pem_encoder_functions },
+    { "gost2001", "provider=gostprov,output=der", gost2001_der_encoder_functions },
+    { "gost2001", "provider=gostprov,output=pem", gost2001_pem_encoder_functions },
+    { "gost2012_256", "provider=gostprov,output=der", gost2012_256_der_encoder_functions },
+    { "gost2012_256", "provider=gostprov,output=pem", gost2012_256_pem_encoder_functions },
+    { "gost2012_512", "provider=gostprov,output=der", gost2012_512_der_encoder_functions },
+    { "gost2012_512", "provider=gostprov,output=pem", gost2012_512_pem_encoder_functions },
     { NULL, NULL, NULL }
 };
 
