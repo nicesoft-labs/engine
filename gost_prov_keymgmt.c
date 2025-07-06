@@ -62,7 +62,22 @@ static int gost_validate(const void *keydata, int selection, int checktype)
 
     if (ctx->ec == NULL)
         return 0;
-    return EC_KEY_check_key(ctx->ec);
+
+    if ((selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0) {
+        return EC_KEY_check_key(ctx->ec);
+    } else if ((selection & OSSL_KEYMGMT_SELECT_PUBLIC_KEY) != 0 &&
+               (selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) == 0) {
+        const EC_GROUP *group = EC_KEY_get0_group(ctx->ec);
+        const EC_POINT *pt = EC_KEY_get0_public_key(ctx->ec);
+
+        if (group == NULL || pt == NULL ||
+            EC_POINT_is_on_curve(group, pt, NULL) != 1) {
+            ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_PUBLIC_KEY);
+            return 0;
+        }
+        return 1;
+    }
+    return 1;
 }
 
 static int gost_match(const void *keydata1, const void *keydata2, int selection)
