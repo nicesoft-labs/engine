@@ -314,10 +314,7 @@ GOST_PUBLIC_KEY_INFO *gost_pub_key_info_from_ec(const EC_KEY *ec,
         goto err;
     }
 
-    /* Critical fix: ensure no unused bits in BIT STRING */
-    info->pub_key->flags |= ASN1_STRING_FLAG_BITS_LEFT;
-    info->pub_key->flags &= ~0x07;
-
+    /* Let ASN1_BIT_STRING_set manage unused bits automatically */
     
     OPENSSL_free(buf);
     return info;
