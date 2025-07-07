@@ -28,7 +28,8 @@
 typedef struct {
     PROV_CTX *provctx;
     int ispem;        /* 0 = DER input, 1 = PEM input */
-    int selection;    /* Remember selection for export */
+    int selection;    /* expected key selection */
+    int init_selection;      /* initial selection from newctx */
 } GOST_DECODER_CTX;
 
 static void *decoder_newctx(void *provctx)
@@ -237,21 +238,22 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
     size_t pidx = 0;
     int ok = 0;
     int sel = 0;
+    DEBUG_START();
+    DEBUG_PARAM("ctx->selection=%d ispem=%d", ctx->selection, ctx->ispem);
+    DEBUG_PARAM("call selection=%d", selection);
+
+    if (selection != 0)
+        ctx->selection = selection;
 
     const char *type = ctx->ispem ? "PEM" : "DER";
     const char *structure =
-        (selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0 ?
+        (ctx->selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0 ?
         "PrivateKeyInfo" : "SubjectPublicKeyInfo";
 
-    DEBUG_START();
-    DEBUG_PARAM("selection=%d", selection);
-    DEBUG_PARAM("input_type=%s structure=%s", type, structure);
-    ctx->selection = selection;
+    DEBUG_PARAM("final type=%s structure=%s", type, structure);
 
     (void)cb;
     (void)cbarg;
-
-    ctx->selection = selection;
 
     if (!read_der_from_bio(ctx, cin, &der, &der_len, &pem_name))
         goto end;
@@ -484,7 +486,13 @@ static int decoder_get_params(void *vctx, OSSL_PARAM params[])
     const char *structure =
         (ctx->selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0 ?
         "PrivateKeyInfo" : "SubjectPublicKeyInfo";
+    if (ctx->selection == 0)
+        structure = (ctx->init_selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0 ?
+            "PrivateKeyInfo" : "SubjectPublicKeyInfo";
 
+    DEBUG_LOG("decoder_get_params: ctx->selection=%d ispem=%d", ctx->selection,
+              ctx->ispem);
+    DEBUG_LOG("decoder_get_params: type=%s structure=%s", type, structure);
     return decoder_get_params_generic(params, type, structure);
 }
 
@@ -505,7 +513,8 @@ static int decoder_set_ctx_params(void *vctx, const OSSL_PARAM params[])
         (ctx->selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0 ?
         "PrivateKeyInfo" : "SubjectPublicKeyInfo";
     const OSSL_PARAM *p;
-
+    DEBUG_LOG("decoder_set_ctx_params: ctx->selection=%d ispem=%d", ctx->selection,
+              ctx->ispem);
     DEBUG_LOG("decoder_set_ctx_params: type=%s structure=%s", type, structure);
 
     if (params == NULL)
@@ -518,8 +527,10 @@ static int decoder_set_ctx_params(void *vctx, const OSSL_PARAM params[])
         if (!OSSL_PARAM_get_utf8_string_ptr(p, &t))
             return 0;
         DEBUG_LOG("decoder_set_ctx_params: input_type=%s", t);
-        if (OPENSSL_strcasecmp(t, type) != 0)
+        if (OPENSSL_strcasecmp(t, type) != 0) {
+            DEBUG_LOG("decoder_set_ctx_params: mismatch input_type expected %s", type);
             return 0;
+        }
     }
 
     p = OSSL_PARAM_locate_const(params, OSSL_DECODER_PARAM_STRUCTURE);
@@ -529,8 +540,10 @@ static int decoder_set_ctx_params(void *vctx, const OSSL_PARAM params[])
         if (!OSSL_PARAM_get_utf8_string_ptr(p, &s))
             return 0;
         DEBUG_LOG("decoder_set_ctx_params: structure_param=%s", s);
-        if (OPENSSL_strcasecmp(s, structure) != 0)
+        if (OPENSSL_strcasecmp(s, structure) != 0) {
+            DEBUG_LOG("decoder_set_ctx_params: mismatch structure expected %s", structure);
             return 0;
+        }
     }
 
     return 1;
@@ -559,6 +572,7 @@ typedef void (*fptr_t)(void);
         if (ctx != NULL) {                                                 \
             ctx->ispem = ispemflag;                                        \
             ctx->selection = selflag;                                      \
+            ctx->init_selection = selflag;                                 \
         }                                                                  \
         DEBUG_RESULT("ctx=%p", ctx);                                     \
         return ctx;                                                        \
