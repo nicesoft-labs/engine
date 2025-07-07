@@ -197,6 +197,7 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
     const unsigned char *p = NULL;
     GOST_PRIVATE_KEY_INFO *priv = NULL;
     GOST_PUBLIC_KEY_INFO *pub = NULL;
+    unsigned char *privbuf = NULL;
     int alg_nid = NID_undef, param_nid = NID_undef;
     GOST_KEYMGMT_CTX *gctx = NULL;
     const char *keytype = NULL;
@@ -263,7 +264,6 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
             }
         }
         if (priv != NULL && parse_algor(priv->algor, &alg_nid, &param_nid)) {
-            unsigned char *privbuf = NULL;
             int i;
             int klen = priv->priv_key->length;
 
@@ -288,10 +288,13 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
         if (pub != NULL &&
             pub->pub_key != NULL && pub->pub_key->length > 0 &&
             parse_algor(pub->algor, &alg_nid, &param_nid)) {
+            if (pub->pub_key->length <= 1)
+                goto end;
+            /* Skip leading unused-bits byte in ASN.1 BIT STRING */
             params[pidx++] =
                 OSSL_PARAM_construct_octet_string(OSSL_PKEY_PARAM_PUB_KEY,
-                                                  pub->pub_key->data,
-                                                  pub->pub_key->length);
+                                                  pub->pub_key->data + 1,
+                                                  pub->pub_key->length - 1);
             sel |= OSSL_KEYMGMT_SELECT_PUBLIC_KEY;
         }
     }
@@ -333,6 +336,7 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
  end:
     OPENSSL_free(pem_name);
     OPENSSL_free(der);
+    OPENSSL_free(privbuf);
     GOST_PRIVATE_KEY_INFO_free(priv);
     GOST_PUBLIC_KEY_INFO_free(pub);
     if (!ok)
