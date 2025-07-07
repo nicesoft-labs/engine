@@ -55,7 +55,9 @@ int main(void)
 
             /* decode DER back to a key */
             p = der;
-            dctx = OSSL_DECODER_CTX_new_for_pkey(&kder, "DER", NULL, "gost2012_256", selection, NULL, "provider=gostprov");
+            dctx = OSSL_DECODER_CTX_new_for_pkey(&kder, "DER", structure,
+                                                "gost2012_256", selection, NULL,
+                                                "provider=gostprov");
             T(dctx != NULL);
             T(OSSL_DECODER_from_data(dctx, &p, &der_len));
             OSSL_DECODER_CTX_free(dctx);
@@ -80,7 +82,9 @@ int main(void)
             ectx = NULL;
 
             p = pem;
-            dctx = OSSL_DECODER_CTX_new_for_pkey(&kpem, "PEM", NULL, "gost2012_256", selection, NULL, "provider=gostprov");
+            dctx = OSSL_DECODER_CTX_new_for_pkey(&kpem, "PEM", structure,
+                                                "gost2012_256", selection, NULL,
+                                                "provider=gostprov");
             T(dctx != NULL);
             T(OSSL_DECODER_from_data(dctx, &p, &pem_len));
             OSSL_DECODER_CTX_free(dctx);
