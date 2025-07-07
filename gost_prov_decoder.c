@@ -352,9 +352,9 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
             DEBUG_LOG("pub->algor %s", pub->algor != NULL ? "present" : "NULL");
             DEBUG_LOG("pub->pub_key %s len=%d", pub->pub_key != NULL ? "present" : "NULL",
                       pub->pub_key != NULL ? pub->pub_key->length : 0);
-            int ok = parse_algor(pub->algor, &alg_nid, &param_nid);
-            DEBUG_LOG("parse_algor returned %d alg_nid=%d param_nid=%d", ok, alg_nid, param_nid);
-            if (ok && pub->pub_key != NULL && pub->pub_key->length > 0) {
+            int alg_ok = parse_algor(pub->algor, &alg_nid, &param_nid);
+            DEBUG_LOG("parse_algor returned %d alg_nid=%d param_nid=%d", alg_ok, alg_nid, param_nid);
+            if (alg_ok && pub->pub_key != NULL && pub->pub_key->length > 0) {
                 /*
                  * ASN1_BIT_STRING stores raw key bytes only, the DER unused-bits
                  * byte is not present in pub_key->data.
