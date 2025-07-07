@@ -99,6 +99,7 @@ int main(void)
         p = der;
         info2 = d2i_GOST_PUBLIC_KEY_INFO(NULL, &p, der_len);
         T(info2 != NULL);
+        DBG("bits_unused after decode: %ld", info2->pub_key->flags & 0x7);
         GOST_PUBLIC_KEY_INFO_free(info2);
         OPENSSL_free(der);
         GOST_PUBLIC_KEY_INFO_free(info);
