@@ -314,7 +314,18 @@ GOST_PUBLIC_KEY_INFO *gost_pub_key_info_from_ec(const EC_KEY *ec,
         goto err;
     }
 
-    /* Let ASN1_BIT_STRING_set manage unused bits automatically */
+    /*
+     * Ensure the BIT STRING reports zero unused bits.  This mirrors the
+     * behaviour of ASN1_BIT_STRING_set_bit() but without altering the data.
+     */
+    info->pub_key->flags &= ~(ASN1_STRING_FLAG_BITS_LEFT | 0x07);
+    info->pub_key->flags |= ASN1_STRING_FLAG_BITS_LEFT;
+
+#ifdef ENABLE_GOST_DEBUG
+    DEBUG_LOG("gost_pub_key_info_from_ec: pub_key length=%d bits_unused=%ld",
+              info->pub_key->length, info->pub_key->flags & 0x7);
+#endif
+
     
     OPENSSL_free(buf);
     return info;
