@@ -68,6 +68,7 @@ int main(void)
         EC_KEY_free(ec);
 
         T(info != NULL);
+        DBG("bits_unused after construction: %ld", info->pub_key->flags & 0x7);
         der_len = i2d_GOST_PUBLIC_KEY_INFO(info, &der);
         T(der_len > 0 && der != NULL);
         /* Optional debug output of generated DER */
