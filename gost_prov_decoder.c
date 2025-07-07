@@ -264,6 +264,7 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
             }
         }
         if (priv != NULL && parse_algor(priv->algor, &alg_nid, &param_nid)) {
+            DEBUG_LOG("decoder_decode: alg_nid=%d param_nid=%d", alg_nid, param_nid);
             int i;
             int klen = priv->priv_key->length;
 
@@ -288,6 +289,7 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
         if (pub != NULL &&
             pub->pub_key != NULL && pub->pub_key->length > 0 &&
             parse_algor(pub->algor, &alg_nid, &param_nid)) {
+            DEBUG_LOG("decoder_decode: alg_nid=%d param_nid=%d", alg_nid, param_nid);
             /*
              * ASN1_BIT_STRING stores raw key bytes only, the DER unused-bits
              * byte is not present in pub_key->data.
@@ -416,6 +418,56 @@ static const OSSL_PARAM *decoder_gettable_params(void *provctx)
     };
     return known_gettable;
 }
+static int decoder_set_ctx_params(void *vctx, const OSSL_PARAM params[])
+{
+    GOST_DECODER_CTX *ctx = vctx;
+    const char *type = ctx->ispem ? "PEM" : "DER";
+    const char *structure =
+        (ctx->selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0 ?
+        "PrivateKeyInfo" : "SubjectPublicKeyInfo";
+    const OSSL_PARAM *p;
+
+    DEBUG_LOG("decoder_set_ctx_params: type=%s structure=%s", type, structure);
+
+    if (params == NULL)
+        return 1;
+
+    p = OSSL_PARAM_locate_const(params, OSSL_DECODER_PARAM_INPUT_TYPE);
+    if (p != NULL) {
+        const char *t = NULL;
+
+        if (!OSSL_PARAM_get_utf8_string_ptr(p, &t))
+            return 0;
+        DEBUG_LOG("decoder_set_ctx_params: input_type=%s", t);
+        if (OPENSSL_strcasecmp(t, type) != 0)
+            return 0;
+    }
+
+    p = OSSL_PARAM_locate_const(params, OSSL_DECODER_PARAM_STRUCTURE);
+    if (p != NULL) {
+        const char *s = NULL;
+
+        if (!OSSL_PARAM_get_utf8_string_ptr(p, &s))
+            return 0;
+        DEBUG_LOG("decoder_set_ctx_params: structure_param=%s", s);
+        if (OPENSSL_strcasecmp(s, structure) != 0)
+            return 0;
+    }
+
+    return 1;
+}
+
+static const OSSL_PARAM *decoder_settable_ctx_params(void *provctx)
+{
+    static const OSSL_PARAM known_settable[] = {
+        OSSL_PARAM_utf8_string(OSSL_DECODER_PARAM_INPUT_TYPE, NULL, 0),
+        OSSL_PARAM_utf8_string(OSSL_DECODER_PARAM_STRUCTURE, NULL, 0),
+        OSSL_PARAM_END
+    };
+
+    return known_settable;
+}
+
 
 typedef void (*fptr_t)(void);
 
@@ -438,6 +490,9 @@ typedef void (*fptr_t)(void);
         { OSSL_FUNC_DECODER_DOES_SELECTION, (fptr_t)decoder_does_selection },\
         { OSSL_FUNC_DECODER_GETTABLE_PARAMS, (fptr_t)decoder_gettable_params },\
         { OSSL_FUNC_DECODER_GET_PARAMS, (fptr_t)decoder_get_params },        \
+        { OSSL_FUNC_DECODER_SET_CTX_PARAMS, (fptr_t)decoder_set_ctx_params },\
+        { OSSL_FUNC_DECODER_SETTABLE_CTX_PARAMS,                             \
+          (fptr_t)decoder_settable_ctx_params },                            \
         { 0, NULL }                                                        \
     }
 
