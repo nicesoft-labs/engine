@@ -303,7 +303,13 @@ GOST_PUBLIC_KEY_INFO *gost_pub_key_info_from_ec(const EC_KEY *ec,
         ERR_raise(ERR_LIB_PROV, ERR_R_ASN1_LIB);
         goto err;
     }
-
+    /*
+     * Clear unused bits information.  The EC point is an octet string so the
+     * BIT STRING wrapper must have zero unused bits to get a leading 0 byte
+     * when encoded to DER.
+     */
+    info->pub_key->flags &= ~(ASN1_STRING_FLAG_BITS_LEFT | 0x7);
+    
     OPENSSL_free(buf);
     return info;
  err:
