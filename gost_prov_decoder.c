@@ -125,6 +125,21 @@ static int parse_algor(const X509_ALGOR *algor, int *alg_nid, int *param_nid)
         return 0;
     }
     GOST_KEY_PARAMS_free(gkp);
+    DEBUG_LOG("parse_algor: alg_nid=%d param_nid=%d", *alg_nid, *param_nid);
+    if (*alg_nid == NID_undef || *param_nid == NID_undef) {
+        unsigned char *tmp = NULL;
+        int tmplen = i2d_X509_ALGOR((X509_ALGOR *)algor, &tmp);
+        if (tmplen > 0 && tmp != NULL) {
+            FILE *f = fopen("/tmp/alg.der", "wb");
+            if (f != NULL) {
+                fwrite(tmp, 1, tmplen, f);
+                fclose(f);
+                DEBUG_LOG("saved AlgorithmIdentifier to /tmp/alg.der");
+            }
+            system("openssl asn1parse -inform DER -in /tmp/alg.der -i");
+            OPENSSL_free(tmp);
+        }
+    }
     return 1;
 }
 
@@ -299,21 +314,41 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
 
     if (priv == NULL
         && ((selection & OSSL_KEYMGMT_SELECT_PUBLIC_KEY) != 0 || selection == 0)) {
+        size_t i;
+
+        DEBUG_LOG("d2i_GOST_PUBLIC_KEY_INFO: der_len=%ld", der_len);
+        for (i = 0; i < (size_t)der_len && i < 32; i++)
+            fprintf(stderr, "%02X ", der[i]);
+        fprintf(stderr, "\n");
+        {
+            FILE *f = fopen("/tmp/pubkey.der", "wb");
+            if (f != NULL) {
+                fwrite(der, 1, der_len, f);
+                fclose(f);
+                DEBUG_LOG("saved DER to /tmp/pubkey.der");
+            }
+        }
+        system("openssl asn1parse -inform DER -in /tmp/pubkey.der -i");
+        /* TODO: openssl asn1parse -inform DER -in /tmp/pubkey.der -i */
+
         p = der;
         pub = d2i_GOST_PUBLIC_KEY_INFO(NULL, &p, der_len);
-        if (pub != NULL &&
-            pub->pub_key != NULL && pub->pub_key->length > 0 &&
-            parse_algor(pub->algor, &alg_nid, &param_nid)) {
-            DEBUG_RESULT("alg_nid=%d param_nid=%d", alg_nid, param_nid);
-            /*
-             * ASN1_BIT_STRING stores raw key bytes only, the DER unused-bits
-             * byte is not present in pub_key->data.
-             */
-            params[pidx++] =
-                OSSL_PARAM_construct_octet_string(OSSL_PKEY_PARAM_PUB_KEY,
-                                                  pub->pub_key->data,
-                                                  pub->pub_key->length);
-            sel |= OSSL_KEYMGMT_SELECT_PUBLIC_KEY;
+        if (pub != NULL) {
+            int ok = parse_algor(pub->algor, &alg_nid, &param_nid);
+            DEBUG_LOG("parse_algor returned %d alg_nid=%d param_nid=%d", ok, alg_nid, param_nid);
+            if (ok && pub->pub_key != NULL && pub->pub_key->length > 0) {
+                /*
+                 * ASN1_BIT_STRING stores raw key bytes only, the DER unused-bits
+                 * byte is not present in pub_key->data.
+                 */
+                params[pidx++] =
+                    OSSL_PARAM_construct_octet_string(OSSL_PKEY_PARAM_PUB_KEY,
+                                                      pub->pub_key->data,
+                                                      pub->pub_key->length);
+                sel |= OSSL_KEYMGMT_SELECT_PUBLIC_KEY;
+            }
+        } else {
+            DEBUG_LOG("d2i_GOST_PUBLIC_KEY_INFO returned NULL");
         }
     }
 
