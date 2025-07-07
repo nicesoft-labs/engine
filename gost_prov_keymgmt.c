@@ -183,23 +183,20 @@ static void *gost_gen(void *genctx, OSSL_CALLBACK *osslcb, void *cbarg)
 
 static void *gost_load(const void *reference, size_t reference_sz)
 {
-    GOST_KEYMGMT_CTX *ctx = gost_keymgmt_new(NULL);
-    EC_KEY *ec = NULL;
+    GOST_KEYMGMT_CTX *src = NULL;
+    GOST_KEYMGMT_CTX *dst = gost_keymgmt_new(NULL);
 
-    if (ctx == NULL)
+    if (dst == NULL)
         return NULL;
-    if (reference_sz == sizeof(ec))
-        memcpy(&ec, reference, sizeof(ec));
-    if (ec != NULL)
-        EC_KEY_up_ref(ec);
-    ctx->ec = ec;
-    if (ec != NULL) {
-        const EC_GROUP *grp = EC_KEY_get0_group(ec);
-        if (grp != NULL)
-            ctx->param_nid = EC_GROUP_get_curve_name(grp);
-    }
-    DEBUG_LOG("gost_load: param_nid=%d", ctx->param_nid);
-    return ctx;
+    if (reference_sz == sizeof(src))
+        memcpy(&src, reference, sizeof(src));
+
+    if (src != NULL && src->ec != NULL) {
+        dst->ec = src->ec;
+        EC_KEY_up_ref(dst->ec);
+        dst->param_nid = src->param_nid;    }
+    DEBUG_LOG("gost_load: param_nid=%d", dst->param_nid);
+    return dst;
 }
 
 static int gost_get_params(void *key, OSSL_PARAM params[])
