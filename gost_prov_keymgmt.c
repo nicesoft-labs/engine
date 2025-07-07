@@ -308,7 +308,7 @@ int gost_import(void *keydata, int selection, const OSSL_PARAM params[])
             return 0;
         ctx->ec = ec;
     }
-
+    OPENSSL_assert(ctx->ec != NULL);
 
     if ((p = OSSL_PARAM_locate_const(params, OSSL_PKEY_PARAM_GROUP_NAME)) != NULL) {
         const char *name = NULL;
