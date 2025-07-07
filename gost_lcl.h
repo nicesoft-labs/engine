@@ -20,6 +20,20 @@
 # include <openssl/asn1.h>
 # include "gost89.h"
 # include "gosthash.h"
+# include <stdio.h>
+
+# define DEBUG_START() do { \
+        printf(">>>> %s\n", __func__); \
+        fflush(stdout); \
+    } while (0)
+# define DEBUG_PARAM(fmt, ...) do { \
+        printf("   param: " fmt "\n", ##__VA_ARGS__); \
+        fflush(stdout); \
+    } while (0)
+# define DEBUG_RESULT(fmt, ...) do { \
+        printf("   result: " fmt "\n", ##__VA_ARGS__); \
+        fflush(stdout); \
+    } while (0)
 /* Control commands */
 # define GOST_PARAM_CRYPT_PARAMS 0
 # define GOST_PARAM_PBE_PARAMS 1
