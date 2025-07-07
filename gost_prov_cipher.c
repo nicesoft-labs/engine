@@ -280,6 +280,8 @@ static int cipher_decrypt_init(void *vgctx,
                                const unsigned char *iv, size_t ivlen,
                                const OSSL_PARAM params[])
 {
+    GOST_CTX *gctx = vgctx;
+
     DEBUG_START();
     DEBUG_PARAM("ctx=%p", gctx);
     DEBUG_PARAM("key=%p keylen=%zu", key, keylen);
