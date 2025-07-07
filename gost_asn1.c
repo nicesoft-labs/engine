@@ -157,7 +157,7 @@ static X509_ALGOR *build_algor_from_param(int param_nid)
     DEBUG_LOG("build_algor_from_param: param_nid=%d alg_nid=%d",
               param_nid, alg_nid);
 
-    if (alg_nid == NID_undef) {
+    if (alg_nid == NID_undef || param_nid == NID_undef) {
         DEBUG_LOG("build_algor_from_param: unknown param_nid %d", param_nid);
         return NULL;
     }
@@ -168,6 +168,10 @@ static X509_ALGOR *build_algor_from_param(int param_nid)
         goto err;
     }
     gkp->key_params = OBJ_nid2obj(param_nid);
+    if (gkp->key_params == NULL) {
+        ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_CURVE);
+        goto err;
+    }
     switch (alg_nid) {
     case NID_id_GostR3410_2012_256:
         gkp->hash_params = OBJ_nid2obj(NID_id_GostR3411_2012_256);
@@ -179,6 +183,12 @@ static X509_ALGOR *build_algor_from_param(int param_nid)
         gkp->hash_params = OBJ_nid2obj(NID_id_GostR3411_94_CryptoProParamSet);
         break;
     }
+
+    if (gkp->hash_params == NULL) {
+        ERR_raise(ERR_LIB_PROV, ERR_R_INTERNAL_ERROR);
+        goto err;
+    }
+
 
     derlen = i2d_GOST_KEY_PARAMS(gkp, &der);
     if (derlen <= 0) {
@@ -303,12 +313,9 @@ GOST_PUBLIC_KEY_INFO *gost_pub_key_info_from_ec(const EC_KEY *ec,
         ERR_raise(ERR_LIB_PROV, ERR_R_ASN1_LIB);
         goto err;
     }
-    /*
-     * Clear unused bits information.  The EC point is an octet string so the
-     * BIT STRING wrapper must have zero unused bits to get a leading 0 byte
-     * when encoded to DER.
-     */
-    info->pub_key->flags &= ~(ASN1_STRING_FLAG_BITS_LEFT | 0x7);
+    
+    /* The EC point encodes as an octet string - no unused bits allowed */
+    info->pub_key->flags &= ~0x07;
     
     OPENSSL_free(buf);
     return info;
