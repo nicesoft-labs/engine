@@ -419,7 +419,8 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
     params[pidx] = OSSL_PARAM_construct_end();
 
     DEBUG_PARAM("import sel=%d ctx->selection=%d", sel, ctx->selection);
-    if (sel != ctx->selection) {
+    DEBUG_LOG("decoder_decode: final sel=%d ctx->selection=%d", sel, ctx->selection);
+    if ((sel & ctx->selection) == 0) {
         ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_DATA);
         goto end;
     }
@@ -566,10 +567,8 @@ static int decoder_set_ctx_params(void *vctx, const OSSL_PARAM params[])
         if (!OSSL_PARAM_get_utf8_string_ptr(p, &t))
             return 0;
         DEBUG_LOG("decoder_set_ctx_params: input_type=%s", t);
-        if (OPENSSL_strcasecmp(t, type) != 0) {
-            DEBUG_LOG("decoder_set_ctx_params: mismatch input_type expected %s", type);
-            return 0;
-        }
+        if (OPENSSL_strcasecmp(t, type) != 0)
+            DEBUG_LOG("decoder_set_ctx_params: ignoring mismatched input_type %s, expected %s", t, type);
     }
 
     p = OSSL_PARAM_locate_const(params, OSSL_DECODER_PARAM_STRUCTURE);
@@ -579,10 +578,8 @@ static int decoder_set_ctx_params(void *vctx, const OSSL_PARAM params[])
         if (!OSSL_PARAM_get_utf8_string_ptr(p, &s))
             return 0;
         DEBUG_LOG("decoder_set_ctx_params: structure_param=%s", s);
-        if (OPENSSL_strcasecmp(s, structure) != 0) {
-            DEBUG_LOG("decoder_set_ctx_params: mismatch structure expected %s", structure);
-            return 0;
-        }
+        if (OPENSSL_strcasecmp(s, structure) != 0)
+            DEBUG_LOG("decoder_set_ctx_params: ignoring mismatched structure %s, expected %s", s, structure);
     }
 
     return 1;
