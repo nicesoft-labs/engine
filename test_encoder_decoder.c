@@ -5,6 +5,11 @@
 #include <openssl/params.h>
 #include <openssl/core_names.h>
 #include <openssl/err.h>
+#include <openssl/ec.h>
+#include <openssl/obj_mac.h>
+#include <openssl/objects.h>
+#include "gost_asn1.h"
+#include "gost_lcl.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -44,6 +49,41 @@ int main(void)
     T(EVP_PKEY_generate(ctx, &key) > 0);
     EVP_PKEY_CTX_free(ctx);
     ctx = NULL;
+
+    /* Check direct GOST_PUBLIC_KEY_INFO encode/decode */
+    {
+        int param_nid = NID_id_tc26_gost_3410_2012_256_paramSetA;
+        EC_KEY *ec = EC_KEY_new();
+        GOST_PUBLIC_KEY_INFO *info = NULL;
+        unsigned char *der = NULL;
+        const unsigned char *p = NULL;
+        GOST_PUBLIC_KEY_INFO *info2 = NULL;
+        int der_len;
+
+        T(ec != NULL);
+        T(fill_GOST_EC_params(ec, param_nid));
+        T(gost_ec_keygen(ec));
+
+        info = gost_pub_key_info_from_ec(ec, param_nid);
+        EC_KEY_free(ec);
+
+        T(info != NULL);
+        der_len = i2d_GOST_PUBLIC_KEY_INFO(info, &der);
+        T(der_len > 0 && der != NULL);
+        FILE *f = fopen("gost_pub.der", "wb");
+        if (f != NULL) {
+            fwrite(der, 1, der_len, f);
+            fclose(f);
+        }
+        p = der;
+        info2 = d2i_GOST_PUBLIC_KEY_INFO(NULL, &p, der_len);
+        T(info2 != NULL);
+        GOST_PUBLIC_KEY_INFO_free(info2);
+        OPENSSL_free(der);
+        GOST_PUBLIC_KEY_INFO_free(info);
+        DBG("GOST_PUBLIC_KEY_INFO encode/decode OK");
+        return 0;
+    }
 
     {
         int is_priv;
