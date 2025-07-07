@@ -363,15 +363,14 @@ static int decoder_export_object(void *vctx,
 }
 
 
-static int decoder_does_selection(void *provctx, int selection)
+static int decoder_does_selection(void *vctx, int selection)
 {
-    int allowed = OSSL_KEYMGMT_SELECT_PRIVATE_KEY | OSSL_KEYMGMT_SELECT_PUBLIC_KEY;
-
-    if (selection == 0)
+    GOST_DECODER_CTX *ctx = vctx;
+    int allowed = ctx->selection;
+    if (selection == 0 || allowed == 0)
         return 1;
-    if ((selection & ~allowed) != 0)
-        return 0;
-    return (selection & allowed) != 0;
+
+    return (selection & allowed) == selection;
 }
 
 static int decoder_get_params_generic(OSSL_PARAM params[],
