@@ -207,6 +207,15 @@ static int parse_algor(const X509_ALGOR *algor, int *alg_nid, int *param_nid)
         GOST_KEY_PARAMS_free(gkp);
         return 0;
     }
+    int expected_alg_nid = param_to_alg_nid(*param_nid);
+    DEBUG_LOG(">>>> parse_algor: expected_alg_nid=%d (%s) from param_nid=%d", expected_alg_nid, OBJ_nid2sn(expected_alg_nid), *param_nid);
+    if (expected_alg_nid != NID_undef && expected_alg_nid != *alg_nid) {
+        ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_DATA);
+        DEBUG_LOG(">>>> parse_algor: alg_nid=%d (%s) does not match expected_alg_nid=%d (%s)",
+                  *alg_nid, OBJ_nid2sn(*alg_nid), expected_alg_nid, OBJ_nid2sn(expected_alg_nid));
+        GOST_KEY_PARAMS_free(gkp);
+        return 0;
+    }
 
     GOST_KEY_PARAMS_free(gkp);
     DEBUG_LOG(">>>> parse_algor: Success, alg_nid=%d (%s) param_nid=%d (%s)",
