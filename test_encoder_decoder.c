@@ -8,10 +8,17 @@
 #include <stdio.h>
 #include <string.h>
 
-#define T(e) \
-    if(!(e)) { \
-        ERR_print_errors_fp(stderr); \
-        goto err; \
+#define DBG(fmt, ...)                                                        \
+    do {                                                                    \
+        fprintf(stderr, ">>>> " fmt "\n", ##__VA_ARGS__);                 \
+        fflush(stderr);                                                     \
+    } while (0)
+
+#define T(e)                                                                \
+    if(!(e)) {                                                              \
+        ERR_print_errors_fp(stderr);                                        \
+        DBG("FAIL");                                                      \
+        goto err;                                                           \
     }
 
 int main(void)
@@ -21,7 +28,11 @@ int main(void)
     EVP_PKEY_CTX *ctx = NULL;
     EVP_PKEY *key = NULL;
 
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+
     OPENSSL_add_all_algorithms_conf();
+    DBG("Loading providers");
 
     defprov = OSSL_PROVIDER_load(NULL, "default");
     gostprov = OSSL_PROVIDER_load(NULL, "gostprov");
@@ -39,31 +50,54 @@ int main(void)
         for (is_priv = 0; is_priv < 2; is_priv++) {
             int selection = is_priv ? OSSL_KEYMGMT_SELECT_PRIVATE_KEY : OSSL_KEYMGMT_SELECT_PUBLIC_KEY;
             const char *structure = is_priv ? "PrivateKeyInfo" : "SubjectPublicKeyInfo";
+            const char *format = NULL;
         unsigned char *der = NULL, *pem = NULL;
         size_t der_len = 0, pem_len = 0;
         EVP_PKEY *kder = NULL, *kpem = NULL;
         const unsigned char *p = NULL;
         OSSL_ENCODER_CTX *ectx = NULL;
         OSSL_DECODER_CTX *dctx = NULL;
+            DBG("Starting %s key cycle", is_priv ? "PRIVATE" : "PUBLIC");
 
             /* encode original key to DER */
-            ectx = OSSL_ENCODER_CTX_new_for_pkey(key, selection, "DER", structure, "provider=gostprov");
+            format = "DER";
+            DBG("Creating encoder ctx: provider=gostprov selection=%d structure=%s format=%s", selection, structure, format);
+            ectx = OSSL_ENCODER_CTX_new_for_pkey(key, selection, format, structure, "provider=gostprov");
             T(ectx != NULL);
-            T(OSSL_ENCODER_to_data(ectx, &der, &der_len));
+            if (!OSSL_ENCODER_to_data(ectx, &der, &der_len)) {
+                ERR_print_errors_fp(stderr);
+                DBG("FAIL");
+                goto err;
+            }
+            DBG("DER length: %zu", der_len);
+            for (size_t i = 0; i < der_len && i < 16; i++)
+                fprintf(stderr, "%02X ", der[i]);
+            fprintf(stderr, "\n");
+            fflush(stderr);
             OSSL_ENCODER_CTX_free(ectx);
             ectx = NULL;
 
             /* decode DER back to a key */
             p = der;
-            dctx = OSSL_DECODER_CTX_new_for_pkey(&kder, "DER", structure,
+            format = "DER";
+            DBG("Creating decoder ctx: provider=gostprov selection=%d structure=%s format=%s", selection, structure, format);
+            dctx = OSSL_DECODER_CTX_new_for_pkey(&kder, format, structure,
                                                 "gost2012_256", selection, NULL,
                                                 "provider=gostprov");
             T(dctx != NULL);
-            T(OSSL_DECODER_from_data(dctx, &p, &der_len));
+            if (!OSSL_DECODER_from_data(dctx, &p, &der_len)) {
+                ERR_print_errors_fp(stderr);
+                DBG("FAIL");
+                goto err;
+            }
             OSSL_DECODER_CTX_free(dctx);
             dctx = NULL;
 
-            T(EVP_PKEY_eq(key, kder));
+            {
+                int eqres = EVP_PKEY_eq(key, kder);
+                DBG("EVP_PKEY_eq returned: %d", eqres);
+                T(eqres);
+            }
             ctx = EVP_PKEY_CTX_new_from_pkey(NULL, kder, NULL);
             T(ctx != NULL);
             if (selection == OSSL_KEYMGMT_SELECT_PUBLIC_KEY) {
@@ -75,22 +109,39 @@ int main(void)
             ctx = NULL;
 
             /* encode the decoded key to PEM and decode again */
-            ectx = OSSL_ENCODER_CTX_new_for_pkey(kder, selection, "PEM", structure, "provider=gostprov");
+            format = "PEM";
+            DBG("Creating encoder ctx: provider=gostprov selection=%d structure=%s format=%s", selection, structure, format);
+            ectx = OSSL_ENCODER_CTX_new_for_pkey(kder, selection, format, structure, "provider=gostprov");
             T(ectx != NULL);
-            T(OSSL_ENCODER_to_data(ectx, &pem, &pem_len));
+            if (!OSSL_ENCODER_to_data(ectx, &pem, &pem_len)) {
+                ERR_print_errors_fp(stderr);
+                DBG("FAIL");
+                goto err;
+            }
+            DBG("PEM length: %zu", pem_len);
             OSSL_ENCODER_CTX_free(ectx);
             ectx = NULL;
 
             p = pem;
-            dctx = OSSL_DECODER_CTX_new_for_pkey(&kpem, "PEM", structure,
+            format = "PEM";
+            DBG("Creating decoder ctx: provider=gostprov selection=%d structure=%s format=%s", selection, structure, format);
+            dctx = OSSL_DECODER_CTX_new_for_pkey(&kpem, format, structure,
                                                 "gost2012_256", selection, NULL,
                                                 "provider=gostprov");
             T(dctx != NULL);
-            T(OSSL_DECODER_from_data(dctx, &p, &pem_len));
+            if (!OSSL_DECODER_from_data(dctx, &p, &pem_len)) {
+                ERR_print_errors_fp(stderr);
+                DBG("FAIL");
+                goto err;
+            }
             OSSL_DECODER_CTX_free(dctx);
             dctx = NULL;
 
-            T(EVP_PKEY_eq(key, kpem));
+            {
+                int eqres = EVP_PKEY_eq(key, kpem);
+                DBG("EVP_PKEY_eq returned: %d", eqres);
+                T(eqres);
+            }
             ctx = EVP_PKEY_CTX_new_from_pkey(NULL, kpem, NULL);
             T(ctx != NULL);
             if (selection == OSSL_KEYMGMT_SELECT_PUBLIC_KEY) {
@@ -108,6 +159,7 @@ int main(void)
 
             OPENSSL_free(der);
             OPENSSL_free(pem);
+            DBG("SUCCESS");
         }
     }
 
