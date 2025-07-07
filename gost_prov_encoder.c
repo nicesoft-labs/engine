@@ -59,7 +59,10 @@ static int encoder_encode(void *vctx, OSSL_CORE_BIO *cout, const void *obj,
     if (gctx == NULL || gctx->ec == NULL || obj_abstract != NULL)
         return 0;
 
-    ctx->selection = selection;
+    if (selection == 0)
+        selection = ctx->selection;
+    else
+        ctx->selection = selection;
     DEBUG_LOG("encoder_encode: param_nid=%d selection=%d", gctx->param_nid, selection);
 
     if (ctx->provctx->libctx != NULL)
