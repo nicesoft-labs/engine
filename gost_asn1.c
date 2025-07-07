@@ -315,7 +315,7 @@ GOST_PUBLIC_KEY_INFO *gost_pub_key_info_from_ec(const EC_KEY *ec,
     }
 
     /* Critical fix: ensure no unused bits in BIT STRING */
-    info->pub_key->unused = 0;
+    info->pub_key->flags |= ASN1_STRING_FLAG_BITS_LEFT;
     info->pub_key->flags &= ~0x07;
 
     
