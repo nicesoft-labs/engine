@@ -95,12 +95,21 @@ static int parse_algor(const X509_ALGOR *algor, int *alg_nid, int *param_nid)
     const ASN1_STRING *pval = NULL;
     const unsigned char *p;
     GOST_KEY_PARAMS *gkp = NULL;
+    char buf[128];
+
 
     if (algor == NULL)
         return 0;
     X509_ALGOR_get0(&algobj, &ptype, (const void **)&pval, algor);
-    if (algobj != NULL)
+    if (algobj != NULL) {
+        OBJ_obj2txt(buf, sizeof(buf), algobj, 1);
+        DEBUG_LOG("algobj OID: %s", buf);
         *alg_nid = OBJ_obj2nid(algobj);
+        if (*alg_nid == NID_undef) {
+            OBJ_create(buf, buf, buf);
+            *alg_nid = OBJ_txt2nid(buf);
+        }
+    }
     if (*alg_nid != NID_id_GostR3410_2001 &&
         *alg_nid != NID_id_GostR3410_2012_256 &&
         *alg_nid != NID_id_GostR3410_2012_512) {
@@ -118,7 +127,13 @@ static int parse_algor(const X509_ALGOR *algor, int *alg_nid, int *param_nid)
         ERR_raise(ERR_LIB_PROV, PROV_R_BAD_ENCODING);
         return 0;
     }
+    OBJ_obj2txt(buf, sizeof(buf), gkp->key_params, 1);
+    DEBUG_LOG("key_params OID: %s", buf);
     *param_nid = OBJ_obj2nid(gkp->key_params);
+    if (*param_nid == NID_undef) {
+        OBJ_create(buf, buf, buf);
+        *param_nid = OBJ_txt2nid(buf);
+    }
     if (*param_nid == NID_undef) {
         ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_CURVE);
         GOST_KEY_PARAMS_free(gkp);
@@ -334,6 +349,9 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
         p = der;
         pub = d2i_GOST_PUBLIC_KEY_INFO(NULL, &p, der_len);
         if (pub != NULL) {
+            DEBUG_LOG("pub->algor %s", pub->algor != NULL ? "present" : "NULL");
+            DEBUG_LOG("pub->pub_key %s len=%d", pub->pub_key != NULL ? "present" : "NULL",
+                      pub->pub_key != NULL ? pub->pub_key->length : 0);
             int ok = parse_algor(pub->algor, &alg_nid, &param_nid);
             DEBUG_LOG("parse_algor returned %d alg_nid=%d param_nid=%d", ok, alg_nid, param_nid);
             if (ok && pub->pub_key != NULL && pub->pub_key->length > 0) {
