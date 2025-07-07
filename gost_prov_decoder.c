@@ -111,10 +111,10 @@ static int param_to_alg_nid(int param_nid)
     case NID_id_tc26_gost_3410_2012_512_paramSetC:
         DEBUG_LOG(">>>> param_to_alg_nid: Returning NID_id_GostR3410_2012_512=%d", NID_id_GostR3410_2012_512);
         return NID_id_GostR3410_2012_512;
-    }
     /* Explicit mapping for test param_nid 1148 used in encoder/decoder test */
     case 1148:
         return NID_id_GostR3410_2012_256;
+    }
     DEBUG_LOG(">>>> param_to_alg_nid: Returning NID_undef=%d", NID_undef);
     return NID_undef;
 }
