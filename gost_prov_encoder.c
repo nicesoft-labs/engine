@@ -76,6 +76,10 @@ static int encoder_encode(void *vctx, OSSL_CORE_BIO *cout, const void *obj,
             DEBUG_LOG("call gost_priv_key_info_from_ec param_nid=%d", gctx->param_nid);
         privinfo = gost_priv_key_info_from_ec(gctx->ec, gctx->param_nid);
         if (privinfo != NULL) {
+            if (privinfo->algor != NULL) {
+                int alg_nid = OBJ_obj2nid(privinfo->algor->algorithm);
+                DEBUG_LOG("privkey AlgorithmIdentifier alg_nid=%d", alg_nid);
+            }
             if (ctx->ispem) {
                 DEBUG_LOG("serialize path: PEM private key");
                 ret = PEM_write_bio_GOST_PRIVATE_KEY_INFO(out, privinfo);
@@ -90,6 +94,10 @@ static int encoder_encode(void *vctx, OSSL_CORE_BIO *cout, const void *obj,
         DEBUG_LOG("call gost_pub_key_info_from_ec param_nid=%d", gctx->param_nid);
         pubinfo = gost_pub_key_info_from_ec(gctx->ec, gctx->param_nid);
         if (pubinfo != NULL) {
+            if (pubinfo->algor != NULL) {
+                int alg_nid = OBJ_obj2nid(pubinfo->algor->algorithm);
+                DEBUG_LOG("pubkey AlgorithmIdentifier alg_nid=%d", alg_nid);
+            }
             if (ctx->ispem) {
                 DEBUG_LOG("serialize path: PEM public key");
                 ret = PEM_write_bio_GOST_PUBLIC_KEY_INFO(out, pubinfo);
