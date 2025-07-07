@@ -300,6 +300,7 @@ int gost_import(void *keydata, int selection, const OSSL_PARAM params[])
     GOST_KEYMGMT_CTX *ctx = keydata;
     EC_KEY *ec = ctx->ec;
     const OSSL_PARAM *p;
+    DEBUG_LOG("gost_import: selection=%d", selection);
 
     if (ec == NULL) {
         ec = EC_KEY_new();
