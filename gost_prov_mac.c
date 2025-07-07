@@ -255,6 +255,7 @@ static int mac_get_ctx_params(void *mctx, OSSL_PARAM params[])
             || !OSSL_PARAM_set_size_t(p, len)) {
             DEBUG_RESULT("fail keylen");
             return 0;
+        }
     }
 
     if ((p = OSSL_PARAM_locate(params, "xof")) != NULL
