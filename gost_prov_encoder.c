@@ -230,18 +230,18 @@ MAKE_ENCODER_FUNCTIONS(gost2012_512, der, 0, OSSL_KEYMGMT_SELECT_PUBLIC_KEY, pub
 MAKE_ENCODER_FUNCTIONS(gost2012_512, pem, 1, OSSL_KEYMGMT_SELECT_PUBLIC_KEY, pub);
 
 const OSSL_ALGORITHM GOST_prov_encoders[] = {
-    { "gost2001", "provider=gostprov,output=der,structure=PrivateKeyInfo", gost2001_der_priv_encoder_functions },
-    { "gost2001", "provider=gostprov,output=pem,structure=PrivateKeyInfo", gost2001_pem_priv_encoder_functions },
-    { "gost2001", "provider=gostprov,output=der,structure=SubjectPublicKeyInfo", gost2001_der_pub_encoder_functions },
-    { "gost2001", "provider=gostprov,output=pem,structure=SubjectPublicKeyInfo", gost2001_pem_pub_encoder_functions },
-    { "gost2012_256", "provider=gostprov,output=der,structure=PrivateKeyInfo", gost2012_256_der_priv_encoder_functions },
-    { "gost2012_256", "provider=gostprov,output=pem,structure=PrivateKeyInfo", gost2012_256_pem_priv_encoder_functions },
-    { "gost2012_256", "provider=gostprov,output=der,structure=SubjectPublicKeyInfo", gost2012_256_der_pub_encoder_functions },
-    { "gost2012_256", "provider=gostprov,output=pem,structure=SubjectPublicKeyInfo", gost2012_256_pem_pub_encoder_functions },
-    { "gost2012_512", "provider=gostprov,output=der,structure=PrivateKeyInfo", gost2012_512_der_priv_encoder_functions },
-    { "gost2012_512", "provider=gostprov,output=pem,structure=PrivateKeyInfo", gost2012_512_pem_priv_encoder_functions },
-    { "gost2012_512", "provider=gostprov,output=der,structure=SubjectPublicKeyInfo", gost2012_512_der_pub_encoder_functions },
-    { "gost2012_512", "provider=gostprov,output=pem,structure=SubjectPublicKeyInfo", gost2012_512_pem_pub_encoder_functions },
+    { "gost2001", "provider=gostprov,output=DER,structure=PrivateKeyInfo", gost2001_der_priv_encoder_functions },
+    { "gost2001", "provider=gostprov,output=PEM,structure=PrivateKeyInfo", gost2001_pem_priv_encoder_functions },
+    { "gost2001", "provider=gostprov,output=DER,structure=SubjectPublicKeyInfo", gost2001_der_pub_encoder_functions },
+    { "gost2001", "provider=gostprov,output=PEM,structure=SubjectPublicKeyInfo", gost2001_pem_pub_encoder_functions },
+    { "gost2012_256", "provider=gostprov,output=DER,structure=PrivateKeyInfo", gost2012_256_der_priv_encoder_functions },
+    { "gost2012_256", "provider=gostprov,output=PEM,structure=PrivateKeyInfo", gost2012_256_pem_priv_encoder_functions },
+    { "gost2012_256", "provider=gostprov,output=DER,structure=SubjectPublicKeyInfo", gost2012_256_der_pub_encoder_functions },
+    { "gost2012_256", "provider=gostprov,output=PEM,structure=SubjectPublicKeyInfo", gost2012_256_pem_pub_encoder_functions },
+    { "gost2012_512", "provider=gostprov,output=DER,structure=PrivateKeyInfo", gost2012_512_der_priv_encoder_functions },
+    { "gost2012_512", "provider=gostprov,output=PEM,structure=PrivateKeyInfo", gost2012_512_pem_priv_encoder_functions },
+    { "gost2012_512", "provider=gostprov,output=DER,structure=SubjectPublicKeyInfo", gost2012_512_der_pub_encoder_functions },
+    { "gost2012_512", "provider=gostprov,output=PEM,structure=SubjectPublicKeyInfo", gost2012_512_pem_pub_encoder_functions },
     { NULL, NULL, NULL }
 };
 
