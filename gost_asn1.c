@@ -313,9 +313,11 @@ GOST_PUBLIC_KEY_INFO *gost_pub_key_info_from_ec(const EC_KEY *ec,
         ERR_raise(ERR_LIB_PROV, ERR_R_ASN1_LIB);
         goto err;
     }
-    
-    /* The EC point encodes as an octet string - no unused bits allowed */
+
+    /* Critical fix: ensure no unused bits in BIT STRING */
+    info->pub_key->unused = 0;
     info->pub_key->flags &= ~0x07;
+
     
     OPENSSL_free(buf);
     return info;
