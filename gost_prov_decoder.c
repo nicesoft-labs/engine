@@ -363,6 +363,20 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
     DEBUG_LOG(">>>> decoder_decode: read_der_from_bio returned der_len=%ld pem_name=%s",
               der_len, pem_name ? pem_name : "NULL");
 
+    /* Save DER for analysis */
+#ifdef ENABLE_GOST_DEBUG
+    {
+        FILE *f = fopen("/tmp/decoder_input.der", "wb");
+        if (f != NULL) {
+            fwrite(der, 1, der_len, f);
+            fclose(f);
+            DEBUG_LOG(">>>> decoder_decode: Saved input DER to /tmp/decoder_input.der");
+        } else {
+            DEBUG_LOG(">>>> decoder_decode: Failed to open /tmp/decoder_input.der for writing");
+        }
+    }
+#endif
+
     /* Create key management context */
     DEBUG_LOG(">>>> decoder_decode: Creating gctx with gost_keymgmt_new");
     gctx = gost_keymgmt_new(ctx->provctx);
@@ -684,20 +698,10 @@ static int decoder_get_params(void *vctx, OSSL_PARAM params[])
     DEBUG_LOG(">>>> decoder_get_params: ctx=%p selection=%d ispem=%d init_selection=%d",
               vctx, ctx->selection, ctx->ispem, ctx->init_selection);
     DEBUG_LOG(">>>> decoder_get_params: type=%s structure=%s", type, structure);
+    debug_dump_params(params);
     int ret = decoder_get_params_generic(params, type, structure);
     DEBUG_LOG(">>>> decoder_get_params: decoder_get_params_generic returned %d", ret);
     return ret;
-}
-
-static const OSSL_PARAM *decoder_gettable_params(void *provctx)
-{
-    static const OSSL_PARAM known_gettable[] = {
-        OSSL_PARAM_utf8_string(OSSL_DECODER_PARAM_INPUT_TYPE, NULL, 0),
-        OSSL_PARAM_utf8_string(OSSL_DECODER_PARAM_STRUCTURE, NULL, 0),
-        OSSL_PARAM_END
-    };
-    DEBUG_LOG(">>>> decoder_gettable_params: provctx=%p returning known_gettable", provctx);
-    return known_gettable;
 }
 
 static int decoder_set_ctx_params(void *vctx, const OSSL_PARAM params[])
@@ -711,6 +715,7 @@ static int decoder_set_ctx_params(void *vctx, const OSSL_PARAM params[])
     DEBUG_LOG(">>>> decoder_set_ctx_params: ctx=%p selection=%d ispem=%d",
               vctx, ctx->selection, ctx->ispem);
     DEBUG_LOG(">>>> decoder_set_ctx_params: Expected type=%s structure=%s", type, structure);
+    debug_dump_params(params);
 
     if (params == NULL) {
         DEBUG_LOG(">>>> decoder_set_ctx_params: params is NULL, returning 1");
