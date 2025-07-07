@@ -165,8 +165,9 @@ static int parse_algor(const X509_ALGOR *algor, int *alg_nid, int *param_nid)
     if (*param_nid == NID_undef) {
         ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_CURVE);
         GOST_KEY_PARAMS_free(gkp);
-    }
+    
         return 0;
+    }
     }
     GOST_KEY_PARAMS_free(gkp);
     DEBUG_LOG("parse_algor: alg_nid=%d param_nid=%d", *alg_nid, *param_nid);
@@ -175,15 +176,16 @@ static int parse_algor(const X509_ALGOR *algor, int *alg_nid, int *param_nid)
         int tmplen = i2d_X509_ALGOR((X509_ALGOR *)algor, &tmp);
         if (tmplen > 0 && tmp != NULL) {
 #ifdef ENABLE_GOST_DEBUG
-            FILE *f = fopen("/tmp/alg.der", "wb");
-            if (f != NULL) {
-                fwrite(tmp, 1, tmplen, f);
-                fclose(f);
-                DEBUG_LOG("saved AlgorithmIdentifier to /tmp/alg.der");
-            }
-#endif
-            OPENSSL_free(tmp);
+        FILE *f = fopen("/tmp/alg.der", "wb");
+        if (f != NULL) {
+            fwrite(tmp, 1, tmplen, f);
+            fclose(f);
+            DEBUG_LOG("saved AlgorithmIdentifier to /tmp/alg.der");
         }
+#endif
+        OPENSSL_free(tmp);
+        }
+        return 0;
     }
     return 1;
 }
