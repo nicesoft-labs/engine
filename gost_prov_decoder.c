@@ -145,6 +145,7 @@ static int parse_algor(const X509_ALGOR *algor, int *alg_nid, int *param_nid)
         unsigned char *tmp = NULL;
         int tmplen = i2d_X509_ALGOR((X509_ALGOR *)algor, &tmp);
         if (tmplen > 0 && tmp != NULL) {
+#ifdef ENABLE_GOST_DEBUG
             FILE *f = fopen("/tmp/alg.der", "wb");
             if (f != NULL) {
                 fwrite(tmp, 1, tmplen, f);
@@ -152,6 +153,7 @@ static int parse_algor(const X509_ALGOR *algor, int *alg_nid, int *param_nid)
                 DEBUG_LOG("saved AlgorithmIdentifier to /tmp/alg.der");
             }
             system("openssl asn1parse -inform DER -in /tmp/alg.der -i");
+#endif
             OPENSSL_free(tmp);
         }
     }
@@ -335,6 +337,7 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
         for (i = 0; i < (size_t)der_len && i < 32; i++)
             fprintf(stderr, "%02X ", der[i]);
         fprintf(stderr, "\n");
+#ifdef ENABLE_GOST_DEBUG
         {
             FILE *f = fopen("/tmp/pubkey.der", "wb");
             if (f != NULL) {
@@ -345,7 +348,7 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
         }
         system("openssl asn1parse -inform DER -in /tmp/pubkey.der -i");
         /* TODO: openssl asn1parse -inform DER -in /tmp/pubkey.der -i */
-
+#endif
         p = der;
         pub = d2i_GOST_PUBLIC_KEY_INFO(NULL, &p, der_len);
         if (pub != NULL) {
