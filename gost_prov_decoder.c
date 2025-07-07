@@ -430,7 +430,7 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
             DEBUG_LOG(">>>> decoder_decode: Successfully decoded GOST_PRIVATE_KEY_INFO priv=%p", priv);
         }
 
-        if (priv != NULL && parse_algor(priv->algor, &alg_nid, ¶m_nid)) {
+        if (priv != NULL && parse_algor(priv->algor, &alg_nid, &param_nid)) {
             DEBUG_LOG(">>>> decoder_decode: parse_algor for PrivateKeyInfo succeeded, alg_nid=%d (%s) param_nid=%d (%s)",
                       alg_nid, OBJ_nid2sn(alg_nid), param_nid, OBJ_nid2sn(param_nid));
             int klen = priv->priv_key->length;
@@ -482,7 +482,7 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
         DEBUG_LOG(">>>> decoder_decode: Decoded GOST_PUBLIC_KEY_INFO pub=%p", pub);
         DEBUG_LOG(">>>> decoder_decode: pub->algor=%p pub->pub_key=%p pub_key_len=%d",
                   pub->algor, pub->pub_key, pub->pub_key ? pub->pub_key->length : 0);
-        int alg_ok = parse_algor(pub->algor, &alg_nid, ¶m_nid);
+        int alg_ok = parse_algor(pub->algor, &alg_nid, &param_nid);
         DEBUG_LOG(">>>> decoder_decode: parse_algor returned %d alg_nid=%d (%s) param_nid=%d (%s)",
                   alg_ok, alg_nid, OBJ_nid2sn(alg_nid), param_nid, OBJ_nid2sn(param_nid));
         if (alg_ok && pub->pub_key != NULL && pub->pub_key->length > 0) {
