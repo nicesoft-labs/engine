@@ -50,6 +50,9 @@ typedef struct gost_prov_crypt_ctx_st GOST_CTX;
 static void digest_freectx(void *vgctx)
 {
     GOST_CTX *gctx = vgctx;
+    DEBUG_START();
+    DEBUG_PARAM("ctx=%p", gctx);
+
 
     /*
      * We don't free gctx->digest here.
@@ -58,12 +61,17 @@ static void digest_freectx(void *vgctx)
      */
     EVP_MD_CTX_free(gctx->dctx);
     OPENSSL_free(gctx);
+    DEBUG_RESULT("freed");
 }
 
 static GOST_CTX *digest_newctx(void *provctx, GOST_digest *descriptor,
                                const OSSL_PARAM *known_params)
 {
     GOST_CTX *gctx = NULL;
+    DEBUG_START();
+    DEBUG_PARAM("provctx=%p", provctx);
+    if (descriptor != NULL)
+        DEBUG_PARAM("descriptor nid=%d (0x%X)", descriptor->nid, descriptor->nid);
 
     if ((gctx = OPENSSL_zalloc(sizeof(*gctx))) != NULL) {
         gctx->provctx = provctx;
@@ -77,6 +85,7 @@ static GOST_CTX *digest_newctx(void *provctx, GOST_digest *descriptor,
             gctx = NULL;
         }
     }
+    DEBUG_RESULT("ctx=%p", gctx);
     return gctx;
 }
 
@@ -85,23 +94,30 @@ static void *digest_dupctx(void *vsrc)
     GOST_CTX *src = vsrc;
     GOST_CTX *dst =
         digest_newctx(src->provctx, src->descriptor, src->known_params);
+    DEBUG_START();
+    DEBUG_PARAM("src=%p", src);
 
     if (dst != NULL)
         EVP_MD_CTX_copy(dst->dctx, src->dctx);
+    DEBUG_RESULT("dst=%p", dst);
     return dst;
 }
 
 static int digest_get_params(EVP_MD *d, OSSL_PARAM params[])
 {
     OSSL_PARAM *p;
+    DEBUG_START();
 
     if (((p = OSSL_PARAM_locate(params, "blocksize")) != NULL
          && !OSSL_PARAM_set_size_t(p, EVP_MD_block_size(d)))
         || ((p = OSSL_PARAM_locate(params, "size")) != NULL
             && !OSSL_PARAM_set_size_t(p, EVP_MD_size(d)))
         || ((p = OSSL_PARAM_locate(params, "xof")) != NULL
-            && !OSSL_PARAM_set_size_t(p, EVP_MD_flags(d) & EVP_MD_FLAG_XOF)))
+            && !OSSL_PARAM_set_size_t(p, EVP_MD_flags(d) & EVP_MD_FLAG_XOF))) {
+        DEBUG_RESULT("fail");
         return 0;
+    }
+    DEBUG_RESULT("success");
     return 1;
 }
 
@@ -109,25 +125,38 @@ static int digest_init(void *vgctx, const OSSL_PARAM unused_params[])
 {
     GOST_CTX *gctx = vgctx;
 
-    return EVP_DigestInit_ex(gctx->dctx, gctx->digest, gctx->provctx->e) > 0;
+    DEBUG_START();
+    DEBUG_PARAM("ctx=%p", gctx);
+
+    int r = EVP_DigestInit_ex(gctx->dctx, gctx->digest, gctx->provctx->e);
+    DEBUG_RESULT("ret=%d", r > 0);
+    return r > 0;
 }
 
 static int digest_update(void *vgctx, const unsigned char *in, size_t inl)
 {
     GOST_CTX *gctx = vgctx;
 
-    return EVP_DigestUpdate(gctx->dctx, in, (int)inl) > 0;
+    DEBUG_START();
+    DEBUG_PARAM("ctx=%p in=%p inl=%zu", gctx, in, inl);
+    int r = EVP_DigestUpdate(gctx->dctx, in, (int)inl);
+    DEBUG_RESULT("ret=%d", r > 0);
+    return r > 0;
 }
 
 static int digest_final(void *vgctx,
                         unsigned char *out, size_t *outl, size_t outsize)
 {
     GOST_CTX *gctx = vgctx;
+    DEBUG_START();
+    DEBUG_PARAM("ctx=%p", gctx);
+    DEBUG_PARAM("out=%p outsize=%zu", out, outsize);
     unsigned int int_outl = outl != NULL ? *outl : 0;
     int res = EVP_DigestFinal(gctx->dctx, out, &int_outl);
 
     if (res > 0 && outl != NULL)
         *outl = (size_t)int_outl;
+    DEBUG_RESULT("ret=%d outl=%u", res > 0, int_outl);
     return res > 0;
 }
 
@@ -145,12 +174,20 @@ typedef void (*fptr_t)(void);
     static OSSL_FUNC_digest_get_params_fn name##_get_params;            \
     static int name##_get_params(OSSL_PARAM *params)                    \
     {                                                                   \
-        return digest_get_params(GOST_init_digest(&name), params);      \
+        DEBUG_START();                                                  \
+        DEBUG_PARAM("%s", #name);                                       \
+        int r = digest_get_params(GOST_init_digest(&name), params);     \
+        DEBUG_RESULT("ret=%d", r);                                     \
+        return r;                                                       \
     }                                                                   \
     static OSSL_FUNC_digest_newctx_fn name##_newctx;                    \
     static void *name##_newctx(void *provctx)                           \
     {                                                                   \
-        return digest_newctx(provctx, &name, known_##name##_params);    \
+        DEBUG_START();                                                  \
+        DEBUG_PARAM("%s", #name);                                       \
+        void *r = digest_newctx(provctx, &name, known_##name##_params); \
+        DEBUG_RESULT("ctx=%p", r);                                     \
+        return r;                                                       \
     }                                                                   \
     static const OSSL_DISPATCH name##_functions[] = {                   \
         { OSSL_FUNC_DIGEST_GET_PARAMS, (fptr_t)name##_get_params },     \
