@@ -337,7 +337,7 @@ set_tests_properties(keymgmt-with-provider
   PROPERTIES ENVIRONMENT "${TEST_ENVIRONMENT_PROVIDER}")
 
 add_executable(test_encoder_decoder test_encoder_decoder.c)
-target_link_libraries(test_encoder_decoder OpenSSL::Crypto)
+target_link_libraries(test_encoder_decoder gost_core gost_err OpenSSL::Crypto)
 add_test(NAME encoder-decoder-with-provider COMMAND test_encoder_decoder)
 set_tests_properties(encoder-decoder-with-provider
   PROPERTIES ENVIRONMENT "${TEST_ENVIRONMENT_PROVIDER}")
