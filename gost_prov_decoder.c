@@ -517,13 +517,20 @@ typedef void (*fptr_t)(void);
         DEBUG_RESULT("ctx=%p", ctx);                                     \
         return ctx;                                                        \
     }                                                                      \
+    static int alg##_##fmt##_##suffix##_decoder_does_selection(            \
+        void *provctx, int selection)                                     \
+    {                                                                      \
+        if (selection == 0 || selflag == 0)                                \
+            return 1;                                                      \
+        return (selection & selflag) == selection;                         \
+    }                                                                      \
     static const OSSL_DISPATCH alg##_##fmt##_##suffix##_decoder_functions[] = { \
         { OSSL_FUNC_DECODER_NEWCTX,                                         \
           (fptr_t)alg##_##fmt##_##suffix##_decoder_newctx },                \
         { OSSL_FUNC_DECODER_FREECTX, (fptr_t)decoder_freectx },             \
         { OSSL_FUNC_DECODER_DECODE, (fptr_t)decoder_decode },               \
         { OSSL_FUNC_DECODER_EXPORT_OBJECT, (fptr_t)decoder_export_object }, \
-        { OSSL_FUNC_DECODER_DOES_SELECTION, (fptr_t)decoder_does_selection },\
+        { OSSL_FUNC_DECODER_DOES_SELECTION, (fptr_t)alg##_##fmt##_##suffix##_decoder_does_selection },\
         { OSSL_FUNC_DECODER_GETTABLE_PARAMS, (fptr_t)decoder_gettable_params },\
         { OSSL_FUNC_DECODER_GET_PARAMS, (fptr_t)decoder_get_params },        \
         { OSSL_FUNC_DECODER_SET_CTX_PARAMS, (fptr_t)decoder_set_ctx_params },\
