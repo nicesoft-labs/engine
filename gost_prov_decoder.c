@@ -129,6 +129,7 @@ static int parse_algor(const X509_ALGOR *algor, int *alg_nid, int *param_nid)
     if (*param_nid == NID_undef) {
         ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_CURVE);
         GOST_KEY_PARAMS_free(gkp);
+    }
         return 0;
     }
     GOST_KEY_PARAMS_free(gkp);
