@@ -65,6 +65,8 @@ typedef struct gost_prov_mac_ctx_st GOST_CTX;
 static void mac_freectx(void *vgctx)
 {
     GOST_CTX *gctx = vgctx;
+    DEBUG_START();
+    DEBUG_PARAM("ctx=%p", gctx);
 
     /*
      * We don't free gctx->digest here.
@@ -73,11 +75,17 @@ static void mac_freectx(void *vgctx)
      */
     EVP_MD_CTX_free(gctx->dctx);
     OPENSSL_free(gctx);
+    DEBUG_RESULT("freed");
 }
 
 static GOST_CTX *mac_newctx(void *provctx, const GOST_DESC *descriptor)
 {
     GOST_CTX *gctx = NULL;
+    DEBUG_START();
+    DEBUG_PARAM("provctx=%p", provctx);
+    if (descriptor != NULL)
+        DEBUG_PARAM("digest nid=%d (0x%X)", descriptor->digest_desc->nid,
+                    descriptor->digest_desc->nid);
 
     if ((gctx = OPENSSL_zalloc(sizeof(*gctx))) != NULL) {
         gctx->provctx = provctx;
@@ -94,6 +102,7 @@ static GOST_CTX *mac_newctx(void *provctx, const GOST_DESC *descriptor)
             gctx = NULL;
         }
     }
+    DEBUG_RESULT("ctx=%p", gctx);
     return gctx;
 }
 
@@ -102,9 +111,12 @@ static void *mac_dupctx(void *vsrc)
     GOST_CTX *src = vsrc;
     GOST_CTX *dst =
         mac_newctx(src->provctx, src->descriptor);
-
+    DEBUG_START();
+    DEBUG_PARAM("src=%p", src);
+    
     if (dst != NULL)
         EVP_MD_CTX_copy(dst->dctx, src->dctx);
+    DEBUG_RESULT("dst=%p", dst);
     return dst;
 }
 
@@ -113,10 +125,16 @@ static int mac_init(void *mctx, const unsigned char *key,
 {
     GOST_CTX *gctx = mctx;
 
-    return mac_set_ctx_params(gctx, params)
+    DEBUG_START();
+    DEBUG_PARAM("ctx=%p", gctx);
+    DEBUG_PARAM("keylen=%zu", keylen);
+
+    int ret = mac_set_ctx_params(gctx, params)
         && (key == NULL
             || EVP_MD_CTX_ctrl(gctx->dctx, EVP_MD_CTRL_SET_KEY,
                                (int)keylen, (void *)key) > 0);
+    DEBUG_RESULT("ret=%d", ret);
+    return ret;
 }
 
 static int mac_update(void *mctx, const unsigned char *in, size_t inl)
@@ -124,6 +142,11 @@ static int mac_update(void *mctx, const unsigned char *in, size_t inl)
     GOST_CTX *gctx = mctx;
 
     return EVP_DigestUpdate(gctx->dctx, in, inl) > 0;
+    DEBUG_START();
+    DEBUG_PARAM("ctx=%p inl=%zu", gctx, inl);
+    int r = EVP_DigestUpdate(gctx->dctx, in, inl);
+    DEBUG_RESULT("ret=%d", r > 0);
+    return r > 0;
 }
 
 static int mac_final(void *mctx, unsigned char *out, size_t *outl,
@@ -132,7 +155,9 @@ static int mac_final(void *mctx, unsigned char *out, size_t *outl,
     GOST_CTX *gctx = mctx;
     unsigned int tmpoutl;
     int ret = 0;
-
+    DEBUG_START();
+    DEBUG_PARAM("ctx=%p", gctx);
+    DEBUG_PARAM("out=%p outsize=%zu", out, outsize);
     /* This is strange code...  but it duplicates pkey_gost_mac_signctx() */
 
     if (outl == NULL)
@@ -149,6 +174,7 @@ static int mac_final(void *mctx, unsigned char *out, size_t *outl,
     }
     if (outl != NULL)
         *outl = (size_t)gctx->mac_size;
+    DEBUG_RESULT("ret=%d", ret);
     return ret;
 }
 
@@ -160,7 +186,10 @@ static const OSSL_PARAM *mac_gettable_params(void *provctx,
         OSSL_PARAM_size_t("keylen", NULL),
         OSSL_PARAM_END
     };
-
+    
+    DEBUG_START();
+    DEBUG_PARAM("provctx=%p", provctx);
+    DEBUG_RESULT("params=%p", params);
     return params;
 }
 
@@ -171,7 +200,9 @@ static const OSSL_PARAM *mac_gettable_ctx_params(void *mctx, void *provctx)
         OSSL_PARAM_size_t("keylen", NULL),
         OSSL_PARAM_END
     };
-
+    DEBUG_START();
+    DEBUG_PARAM("mctx=%p", mctx);
+    DEBUG_RESULT("params=%p", params);
     return params;
 }
 
@@ -182,7 +213,9 @@ static const OSSL_PARAM *mac_settable_ctx_params(void *mctx, void *provctx)
         OSSL_PARAM_octet_string("key", NULL, 0),
         OSSL_PARAM_END
     };
-
+    DEBUG_START();
+    DEBUG_PARAM("mctx=%p", mctx);
+    DEBUG_RESULT("params=%p", params);
     return params;
 }
 
@@ -190,11 +223,17 @@ static int mac_get_params(const GOST_DESC * descriptor, OSSL_PARAM params[])
 {
     OSSL_PARAM *p = NULL;
 
+    DEBUG_START();
+    DEBUG_PARAM("descriptor=%p", descriptor);
+
     if (((p = OSSL_PARAM_locate(params, "size")) != NULL
          && !OSSL_PARAM_set_size_t(p, descriptor->initial_mac_size))
         || ((p = OSSL_PARAM_locate(params, "keylen")) != NULL
-            && !OSSL_PARAM_set_size_t(p, 32)))
+            && !OSSL_PARAM_set_size_t(p, 32))) {
+        DEBUG_RESULT("fail");
         return 0;
+    }
+    DEBUG_RESULT("success");
     return 1;
 }
 
@@ -202,24 +241,30 @@ static int mac_get_ctx_params(void *mctx, OSSL_PARAM params[])
 {
     GOST_CTX *gctx = mctx;
     OSSL_PARAM *p = NULL;
-
+    DEBUG_START();
+    DEBUG_PARAM("ctx=%p", gctx);
+    
     if ((p = OSSL_PARAM_locate(params, "size")) != NULL
         && !OSSL_PARAM_set_size_t(p, gctx->mac_size))
-        return 0;
+        { DEBUG_RESULT("fail size"); return 0; }
 
     if ((p = OSSL_PARAM_locate(params, "keylen")) != NULL) {
         unsigned int len = 0;
 
         if (EVP_MD_CTX_ctrl(gctx->dctx, EVP_MD_CTRL_KEY_LEN, 0, &len) <= 0
-            || !OSSL_PARAM_set_size_t(p, len))
+            || !OSSL_PARAM_set_size_t(p, len)) {
+            DEBUG_RESULT("fail keylen");
             return 0;
     }
 
     if ((p = OSSL_PARAM_locate(params, "xof")) != NULL
         && (!(EVP_MD_flags(EVP_MD_CTX_md(gctx->dctx)) & EVP_MD_FLAG_XOF)
-            || !OSSL_PARAM_set_int(p, gctx->xof_mode)))
+            || !OSSL_PARAM_set_int(p, gctx->xof_mode))) {
+        DEBUG_RESULT("fail xof");
         return 0;
-
+    }
+    DEBUG_RESULT("success");
+        
     return 1;
 }
 
@@ -228,37 +273,50 @@ static int mac_set_ctx_params(void *mctx, const OSSL_PARAM params[])
     GOST_CTX *gctx = mctx;
     const OSSL_PARAM *p = NULL;
 
+    DEBUG_START();
+    DEBUG_PARAM("ctx=%p", gctx);
+
     if ((p = OSSL_PARAM_locate_const(params, "size")) != NULL
-        && !OSSL_PARAM_get_size_t(p, &gctx->mac_size))
+        && !OSSL_PARAM_get_size_t(p, &gctx->mac_size)) {
+        DEBUG_RESULT("fail size");
         return 0;
+    }
     if ((p = OSSL_PARAM_locate_const(params, "key")) != NULL) {
         const unsigned char *key = NULL;
         size_t keylen = 0;
         int ret;
 
-        if (!OSSL_PARAM_get_octet_string_ptr(p, (const void **)&key, &keylen))
+        if (!OSSL_PARAM_get_octet_string_ptr(p, (const void **)&key, &keylen)) {
+            DEBUG_RESULT("fail key ptr");
             return 0;
-
+        }
         ret = EVP_MD_CTX_ctrl(gctx->dctx, EVP_MD_CTRL_SET_KEY,
                               (int)keylen, (void *)key);
-        if (ret <= 0 && ret != -2)
+        if (ret <= 0 && ret != -2) {
+            DEBUG_RESULT("fail set key");
             return 0;
+        }
     }
     if ((p = OSSL_PARAM_locate_const(params, "xof")) != NULL
         && (!(EVP_MD_flags(EVP_MD_CTX_md(gctx->dctx)) & EVP_MD_FLAG_XOF)
-            || !OSSL_PARAM_get_int(p, &gctx->xof_mode)))
+            || !OSSL_PARAM_get_int(p, &gctx->xof_mode))) {
+        DEBUG_RESULT("fail xof set");
         return 0;
+    }
     if ((p = OSSL_PARAM_locate_const(params, "key-mesh")) != NULL) {
         size_t key_mesh = 0;
         int i_cipher_key_mesh = 0, *p_cipher_key_mesh = NULL;
 
-        if (!OSSL_PARAM_get_size_t(p, &key_mesh))
+        if (!OSSL_PARAM_get_size_t(p, &key_mesh)) {
+            DEBUG_RESULT("fail key_mesh");
             return 0;
+        }
 
         if ((p = OSSL_PARAM_locate_const(params, "cipher-key-mesh")) != NULL) {
             size_t cipher_key_mesh = 0;
 
             if (!OSSL_PARAM_get_size_t(p, &cipher_key_mesh)) {
+                DEBUG_RESULT("fail cipher_key_mesh");
                 return 0;
             } else {
                 i_cipher_key_mesh = (int)cipher_key_mesh;
@@ -267,9 +325,12 @@ static int mac_set_ctx_params(void *mctx, const OSSL_PARAM params[])
         }
 
         if (EVP_MD_CTX_ctrl(gctx->dctx, EVP_CTRL_KEY_MESH,
-                            key_mesh, p_cipher_key_mesh) <= 0)
+                            key_mesh, p_cipher_key_mesh) <= 0) {
+            DEBUG_RESULT("fail key mesh ctrl");
             return 0;
+        }
     }
+    DEBUG_RESULT("success");
     return 1;
 }
 
@@ -294,17 +355,29 @@ typedef void (*fptr_t)(void);
     static OSSL_FUNC_mac_newctx_fn name##_newctx;                       \
     static void *name##_newctx(void *provctx)                           \
     {                                                                   \
-        return mac_newctx(provctx, &name##_desc);                       \
+        DEBUG_START();                                                  \
+        DEBUG_PARAM("newctx %s", #name);                               \
+        void *r = mac_newctx(provctx, &name##_desc);                    \
+        DEBUG_RESULT("ctx=%p", r);                                     \
+        return r;                                                       \
     }                                                                   \
     static OSSL_FUNC_mac_gettable_params_fn name##_gettable_params;     \
     static const OSSL_PARAM *name##_gettable_params(void *provctx)      \
     {                                                                   \
-        return mac_gettable_params(provctx, &name##_desc);              \
+        DEBUG_START();                                                  \
+        DEBUG_PARAM("gettable %s", #name);                             \
+        const OSSL_PARAM *r = mac_gettable_params(provctx, &name##_desc); \
+        DEBUG_RESULT("params=%p", r);                                  \
+        return r;                                                       \
     }                                                                   \
     static OSSL_FUNC_mac_get_params_fn name##_get_params;               \
     static int name##_get_params(OSSL_PARAM *params)                    \
     {                                                                   \
-        return mac_get_params(&name##_desc, params);                    \
+        DEBUG_START();                                                  \
+        DEBUG_PARAM("get_params %s", #name);                           \
+        int r = mac_get_params(&name##_desc, params);                   \
+        DEBUG_RESULT("ret=%d", r);                                     \
+        return r;                                                       \
     }                                                                   \
     static const OSSL_DISPATCH name##_functions[] = {                   \
         { OSSL_FUNC_MAC_GETTABLE_PARAMS,                                \
