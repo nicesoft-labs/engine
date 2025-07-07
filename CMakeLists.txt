@@ -53,7 +53,7 @@ if (ASAN)
   set(SKIP_PERL_TESTS 1)
 endif()
 
-set(CMAKE_C_STANDARD 90)
+set(CMAKE_C_STANDARD 99)
 if(ENABLE_GOST_DEBUG)
   add_definitions(-DENABLE_GOST_DEBUG)
 endif()
