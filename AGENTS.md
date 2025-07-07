@@ -4,3 +4,4 @@ mkdir build && cd build
 cmake -DCMAKE_BUILD_TYPE=Debug ..
 cmake --build . --config Debug
 дополнительно установить gbd и strace и xxd для отладки
+использовать переменные: env OPENSSL_CONF=./test/provider.cnf
