@@ -105,14 +105,10 @@ static int parse_algor(const X509_ALGOR *algor, int *alg_nid, int *param_nid)
         OBJ_obj2txt(buf, sizeof(buf), algobj, 1);
         DEBUG_LOG("algobj OID: %s", buf);
         *alg_nid = OBJ_obj2nid(algobj);
-        if (*alg_nid == NID_undef) {
-            OBJ_create(buf, buf, buf);
-            *alg_nid = OBJ_txt2nid(buf);
-        }
-    }
-    if (*alg_nid != NID_id_GostR3410_2001 &&
-        *alg_nid != NID_id_GostR3410_2012_256 &&
-        *alg_nid != NID_id_GostR3410_2012_512) {
+    if (*alg_nid == NID_undef ||
+        (*alg_nid != NID_id_GostR3410_2001 &&
+         *alg_nid != NID_id_GostR3410_2012_256 &&
+         *alg_nid != NID_id_GostR3410_2012_512)) {
         ERR_raise_data(ERR_LIB_PROV, PROV_R_NOT_SUPPORTED,
                        "unknown algorithm OID %s",
                        OBJ_nid2sn(*alg_nid));
@@ -131,10 +127,6 @@ static int parse_algor(const X509_ALGOR *algor, int *alg_nid, int *param_nid)
     DEBUG_LOG("key_params OID: %s", buf);
     *param_nid = OBJ_obj2nid(gkp->key_params);
     if (*param_nid == NID_undef) {
-        OBJ_create(buf, buf, buf);
-        *param_nid = OBJ_txt2nid(buf);
-    }
-    if (*param_nid == NID_undef) {
         ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_CURVE);
         GOST_KEY_PARAMS_free(gkp);
         return 0;
@@ -152,7 +144,6 @@ static int parse_algor(const X509_ALGOR *algor, int *alg_nid, int *param_nid)
                 fclose(f);
                 DEBUG_LOG("saved AlgorithmIdentifier to /tmp/alg.der");
             }
-            system("openssl asn1parse -inform DER -in /tmp/alg.der -i");
 #endif
             OPENSSL_free(tmp);
         }
@@ -346,8 +337,6 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
                 DEBUG_LOG("saved DER to /tmp/pubkey.der");
             }
         }
-        system("openssl asn1parse -inform DER -in /tmp/pubkey.der -i");
-        /* TODO: openssl asn1parse -inform DER -in /tmp/pubkey.der -i */
 #endif
         p = der;
         pub = d2i_GOST_PUBLIC_KEY_INFO(NULL, &p, der_len);
