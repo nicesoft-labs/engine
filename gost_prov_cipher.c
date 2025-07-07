@@ -55,6 +55,9 @@ static void cipher_freectx(void *vgctx)
 {
     GOST_CTX *gctx = vgctx;
 
+    DEBUG_START();
+    DEBUG_PARAM("ctx=%p", gctx);
+
     /*
      * We don't free gctx->cipher here.
      * That will be done by the provider teardown, via
@@ -62,12 +65,19 @@ static void cipher_freectx(void *vgctx)
      */
     EVP_CIPHER_CTX_free(gctx->cctx);
     OPENSSL_free(gctx);
+    DEBUG_RESULT("freed");
 }
 
 static GOST_CTX *cipher_newctx(void *provctx, GOST_cipher *descriptor,
                                 const OSSL_PARAM *known_params)
 {
     GOST_CTX *gctx = NULL;
+
+    DEBUG_START();
+    DEBUG_PARAM("provctx=%p", provctx);
+    if (descriptor != NULL)
+        DEBUG_PARAM("descriptor nid=%d (0x%X)", descriptor->nid, descriptor->nid);
+
 
     if ((gctx = OPENSSL_zalloc(sizeof(*gctx))) != NULL) {
         gctx->provctx = provctx;
@@ -90,14 +100,20 @@ static void *cipher_dupctx(void *vsrc)
     GOST_CTX *dst =
         cipher_newctx(src->provctx, src->descriptor, src->known_params);
 
+    DEBUG_START();
+    DEBUG_PARAM("src=%p", src);
+    
     if (dst != NULL)
         EVP_CIPHER_CTX_copy(dst->cctx, src->cctx);
+    DEBUG_RESULT("dst=%p", dst);
     return dst;
 }
 
 static int cipher_get_params(EVP_CIPHER *c, OSSL_PARAM params[])
 {
     OSSL_PARAM *p;
+    DEBUG_START();
+
 
     if (((p = OSSL_PARAM_locate(params, "blocksize")) != NULL
          && !OSSL_PARAM_set_size_t(p, EVP_CIPHER_block_size(c)))
@@ -106,8 +122,11 @@ static int cipher_get_params(EVP_CIPHER *c, OSSL_PARAM params[])
         || ((p = OSSL_PARAM_locate(params, "keylen")) != NULL
             && !OSSL_PARAM_set_size_t(p, EVP_CIPHER_key_length(c)))
         || ((p = OSSL_PARAM_locate(params, "mode")) != NULL
-            && !OSSL_PARAM_set_size_t(p, EVP_CIPHER_flags(c))))
+            && !OSSL_PARAM_set_size_t(p, EVP_CIPHER_flags(c)))) {
+        DEBUG_RESULT("fail");
         return 0;
+    }
+    DEBUG_RESULT("success");
     return 1;
 }
 
@@ -116,8 +135,14 @@ static int cipher_get_ctx_params(void *vgctx, OSSL_PARAM params[])
     GOST_CTX *gctx = vgctx;
     OSSL_PARAM *p;
 
+    DEBUG_START();
+    DEBUG_PARAM("ctx=%p", gctx);
+    
     if (!cipher_get_params(gctx->cipher, params))
-        return 0;
+        {
+            DEBUG_RESULT("cipher_get_params failed");
+            return 0;
+        }
     if ((p = OSSL_PARAM_locate(params, "alg_id_param")) != NULL) {
         ASN1_TYPE *algidparam = NULL;
         unsigned char *der = NULL;
@@ -148,8 +173,12 @@ static int cipher_get_ctx_params(void *vgctx, OSSL_PARAM params[])
         if (!OSSL_PARAM_get_octet_string_ptr(p, (const void**)&tag, &taglen)
             || EVP_CIPHER_CTX_ctrl(gctx->cctx, EVP_CTRL_AEAD_GET_TAG,
                                    taglen, tag) <= 0)
-            return 0;
+            {
+                DEBUG_RESULT("fail");
+                return 0;
+            }
     }
+    DEBUG_RESULT("success");
     return 1;
 }
 
@@ -157,6 +186,9 @@ static int cipher_set_ctx_params(void *vgctx, const OSSL_PARAM params[])
 {
     GOST_CTX *gctx = vgctx;
     const OSSL_PARAM *p;
+
+    DEBUG_START();
+    DEBUG_PARAM("ctx=%p", gctx);
 
     if ((p = OSSL_PARAM_locate_const(params, "alg_id_param")) != NULL) {
         ASN1_TYPE *algidparam = NULL;
@@ -169,30 +201,37 @@ static int cipher_set_ctx_params(void *vgctx, const OSSL_PARAM params[])
             && EVP_CIPHER_asn1_to_param(gctx->cctx, algidparam) > 0;
 
         ASN1_TYPE_free(algidparam);
+        DEBUG_RESULT("alg_id_param ret=%d", ret);
         return ret;
     }
     if ((p = OSSL_PARAM_locate_const(params, "padding")) != NULL) {
         unsigned int pad = 0;
 
         if (!OSSL_PARAM_get_uint(p, &pad)
-            || EVP_CIPHER_CTX_set_padding(gctx->cctx, pad) <= 0)
+            || EVP_CIPHER_CTX_set_padding(gctx->cctx, pad) <= 0) {
+            DEBUG_RESULT("fail padding");
             return 0;
+        }
     }
     if ((p = OSSL_PARAM_locate_const(params, "key-mesh")) != NULL) {
         size_t key_mesh = 0;
 
         if (!OSSL_PARAM_get_size_t(p, &key_mesh)
             || EVP_CIPHER_CTX_ctrl(gctx->cctx, EVP_CTRL_KEY_MESH,
-                                   key_mesh, NULL) <= 0)
+                                   key_mesh, NULL) <= 0) {
+            DEBUG_RESULT("fail key-mesh");
             return 0;
+        }
     }
     if ((p = OSSL_PARAM_locate_const(params, OSSL_CIPHER_PARAM_IVLEN)) != NULL) {
         size_t ivlen = 0;
 
         if (!OSSL_PARAM_get_size_t(p, &ivlen)
             || EVP_CIPHER_CTX_ctrl(gctx->cctx, EVP_CTRL_AEAD_SET_IVLEN,
-                                   ivlen, NULL) <= 0)
+                                   ivlen, NULL) <= 0) {
+            DEBUG_RESULT("fail ivlen");
             return 0;
+        }
     }
     if ((p = OSSL_PARAM_locate_const(params, OSSL_CIPHER_PARAM_AEAD_TAG)) != NULL) {
         char tag[1024];
@@ -201,9 +240,12 @@ static int cipher_set_ctx_params(void *vgctx, const OSSL_PARAM params[])
 
         if (!OSSL_PARAM_get_octet_string(p, &val, 1024, &taglen)
             || EVP_CIPHER_CTX_ctrl(gctx->cctx, EVP_CTRL_AEAD_SET_TAG,
-                                   taglen, &tag) <= 0)
+                                   taglen, &tag) <= 0) {
+            DEBUG_RESULT("fail tag");
             return 0;
+        }
     }
+    DEBUG_RESULT("success");
     return 1;
 }
 
@@ -214,13 +256,23 @@ static int cipher_encrypt_init(void *vgctx,
 {
     GOST_CTX *gctx = vgctx;
 
+    DEBUG_START();
+    DEBUG_PARAM("ctx=%p", gctx);
+    DEBUG_PARAM("key=%p keylen=%zu", key, keylen);
+    DEBUG_PARAM("iv=%p ivlen=%zu", iv, ivlen);
+
     if (!cipher_set_ctx_params(vgctx, params)
         || keylen > EVP_CIPHER_key_length(gctx->cipher)
         || ivlen > EVP_CIPHER_iv_length(gctx->cipher))
-        return 0;
+        {
+            DEBUG_RESULT("fail params");
+            return 0;
+        }
 
-    return EVP_CipherInit_ex(gctx->cctx, gctx->cipher, gctx->provctx->e,
-                             key, iv, 1);
+    int r = EVP_CipherInit_ex(gctx->cctx, gctx->cipher, gctx->provctx->e,
+                              key, iv, 1);
+    DEBUG_RESULT("EVP_CipherInit_ex ret=%d", r);
+    return r;
 }
 
 static int cipher_decrypt_init(void *vgctx,
@@ -228,14 +280,23 @@ static int cipher_decrypt_init(void *vgctx,
                                const unsigned char *iv, size_t ivlen,
                                const OSSL_PARAM params[])
 {
-    GOST_CTX *gctx = vgctx;
+    DEBUG_START();
+    DEBUG_PARAM("ctx=%p", gctx);
+    DEBUG_PARAM("key=%p keylen=%zu", key, keylen);
+    DEBUG_PARAM("iv=%p ivlen=%zu", iv, ivlen);
+
 
     if (!cipher_set_ctx_params(vgctx, params)
         || keylen > EVP_CIPHER_key_length(gctx->cipher)
         || ivlen > EVP_CIPHER_iv_length(gctx->cipher))
-        return 0;
-    return EVP_CipherInit_ex(gctx->cctx, gctx->cipher, gctx->provctx->e,
-                             key, iv, 0) > 0;
+        {
+            DEBUG_RESULT("fail params");
+            return 0;
+        }
+    int r = EVP_CipherInit_ex(gctx->cctx, gctx->cipher, gctx->provctx->e,
+                              key, iv, 0);
+    DEBUG_RESULT("EVP_CipherInit_ex ret=%d", r > 0);
+    return r > 0;
 }
 
 static int cipher_update(void *vgctx,
@@ -243,11 +304,15 @@ static int cipher_update(void *vgctx,
                          const unsigned char *in, size_t inl)
 {
     GOST_CTX *gctx = vgctx;
+    DEBUG_START();
+    DEBUG_PARAM("ctx=%p in=%p inl=%zu", gctx, in, inl);
+    DEBUG_PARAM("out=%p outsize=%zu", out, outsize);
     int int_outl = outl != NULL ? *outl : 0;
     int res = EVP_CipherUpdate(gctx->cctx, out, &int_outl, in, (int)inl);
 
     if (res > 0 && outl != NULL)
         *outl = (size_t)int_outl;
+    DEBUG_RESULT("ret=%d outl=%d", res > 0, int_outl);
     return res > 0;
 }
 
@@ -255,11 +320,15 @@ static int cipher_final(void *vgctx,
                         unsigned char *out, size_t *outl, size_t outsize)
 {
     GOST_CTX *gctx = vgctx;
+    DEBUG_START();
+    DEBUG_PARAM("ctx=%p", gctx);
+    DEBUG_PARAM("out=%p outsize=%zu", out, outsize);
     int int_outl = outl != NULL ? *outl : 0;
     int res = EVP_CipherFinal(gctx->cctx, out, &int_outl);
 
     if (res > 0 && outl != NULL)
         *outl = (size_t)int_outl;
+    DEBUG_RESULT("ret=%d outl=%d", res > 0, int_outl);
     return res > 0;
 }
 
@@ -290,12 +359,20 @@ typedef void (*fptr_t)(void);
     static OSSL_FUNC_cipher_get_params_fn name##_get_params;            \
     static int name##_get_params(OSSL_PARAM *params)                    \
     {                                                                   \
-        return cipher_get_params(GOST_init_cipher(&name), params);      \
+        DEBUG_START();                                                  \
+        DEBUG_PARAM("%s", #name);                                       \
+        int r = cipher_get_params(GOST_init_cipher(&name), params);     \
+        DEBUG_RESULT("ret=%d", r);                                     \
+        return r;                                                       \
     }                                                                   \
     static OSSL_FUNC_cipher_newctx_fn name##_newctx;                    \
     static void *name##_newctx(void *provctx)                           \
     {                                                                   \
-        return cipher_newctx(provctx, &name, known_##name##_params);    \
+        DEBUG_START();                                                  \
+        DEBUG_PARAM("%s", #name);                                       \
+        void *r = cipher_newctx(provctx, &name, known_##name##_params); \
+        DEBUG_RESULT("ctx=%p", r);                                     \
+        return r;                                                       \
     }                                                                   \
     static const OSSL_DISPATCH name##_functions[] = {                   \
         { OSSL_FUNC_CIPHER_GET_PARAMS, (fptr_t)name##_get_params },     \
