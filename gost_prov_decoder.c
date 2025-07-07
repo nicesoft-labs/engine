@@ -288,13 +288,14 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
         if (pub != NULL &&
             pub->pub_key != NULL && pub->pub_key->length > 0 &&
             parse_algor(pub->algor, &alg_nid, &param_nid)) {
-            if (pub->pub_key->length <= 1)
-                goto end;
-            /* Skip leading unused-bits byte in ASN.1 BIT STRING */
+            /*
+             * ASN1_BIT_STRING stores raw key bytes only, the DER unused-bits
+             * byte is not present in pub_key->data.
+             */
             params[pidx++] =
                 OSSL_PARAM_construct_octet_string(OSSL_PKEY_PARAM_PUB_KEY,
-                                                  pub->pub_key->data + 1,
-                                                  pub->pub_key->length - 1);
+                                                  pub->pub_key->data,
+                                                  pub->pub_key->length);
             sel |= OSSL_KEYMGMT_SELECT_PUBLIC_KEY;
         }
     }
