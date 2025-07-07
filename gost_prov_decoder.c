@@ -132,8 +132,11 @@ static int read_der_from_bio(GOST_DECODER_CTX *ctx, OSSL_CORE_BIO *cin,
                              unsigned char **der, long *der_len, char **pem_name)
 {
     BIO *in = BIO_new_from_core_bio(ctx->provctx->libctx, cin);
+    BIO *mem = NULL;
     int ok = 0;
-
+    
+    DEBUG_START();
+    DEBUG_PARAM("ispem=%d", ctx->ispem);
     if (in == NULL)
         return 0;
 
@@ -160,12 +163,13 @@ static int read_der_from_bio(GOST_DECODER_CTX *ctx, OSSL_CORE_BIO *cin,
         }
         OPENSSL_free(label);
     } else {
-        BIO *mem = BIO_new(BIO_s_mem());
         char tbuf[4096];
         size_t n;
 
+        mem = BIO_new(BIO_s_mem());
         if (mem == NULL)
             goto end;
+        
         /* Stream input to a memory BIO to avoid realloc loops */
         while (BIO_read_ex(in, tbuf, sizeof(tbuf), &n))
             BIO_write(mem, tbuf, n);
@@ -181,8 +185,12 @@ static int read_der_from_bio(GOST_DECODER_CTX *ctx, OSSL_CORE_BIO *cin,
             BIO_free(mem);
         }
     }
- end:
+end:
     BIO_free(in);
+    if (mem != NULL)
+        BIO_free(mem);
+    if (ok)
+        DEBUG_RESULT("der_len=%ld", *der_len);
     return ok;
 }
 
@@ -205,9 +213,16 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
     size_t pidx = 0;
     int ok = 0;
     int sel = 0;
-    
+
+    const char *type = ctx->ispem ? "PEM" : "DER";
+    const char *structure =
+        (selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0 ?
+        "PrivateKeyInfo" : "SubjectPublicKeyInfo";
+
+    DEBUG_START();
+    DEBUG_PARAM("selection=%d", selection);
+    DEBUG_PARAM("input_type=%s structure=%s", type, structure);
     ctx->selection = selection;
-    DEBUG_LOG("decoder_decode: selection=%d", selection);
 
     (void)cb;
     (void)cbarg;
@@ -264,7 +279,7 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
             }
         }
         if (priv != NULL && parse_algor(priv->algor, &alg_nid, &param_nid)) {
-            DEBUG_LOG("decoder_decode: alg_nid=%d param_nid=%d", alg_nid, param_nid);
+            DEBUG_RESULT("alg_nid=%d param_nid=%d", alg_nid, param_nid);
             int i;
             int klen = priv->priv_key->length;
 
@@ -289,7 +304,7 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
         if (pub != NULL &&
             pub->pub_key != NULL && pub->pub_key->length > 0 &&
             parse_algor(pub->algor, &alg_nid, &param_nid)) {
-            DEBUG_LOG("decoder_decode: alg_nid=%d param_nid=%d", alg_nid, param_nid);
+            DEBUG_RESULT("alg_nid=%d param_nid=%d", alg_nid, param_nid);
             /*
              * ASN1_BIT_STRING stores raw key bytes only, the DER unused-bits
              * byte is not present in pub_key->data.
@@ -318,8 +333,16 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
                                                       0);
     params[pidx] = OSSL_PARAM_construct_end();
 
-    if (!gost_import(gctx, sel, params))
+    DEBUG_PARAM("import sel=%d ctx->selection=%d", sel, ctx->selection);
+    if (sel != ctx->selection) {
+        ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_DATA);
         goto end;
+    }
+    if (!gost_import(gctx, sel, params)) {
+        ERR_print_errors_fp(stderr);
+        goto end;
+    }
+    DEBUG_RESULT("import ok");
 
     {
         int objtype = OSSL_OBJECT_PKEY;
@@ -343,7 +366,10 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
     GOST_PRIVATE_KEY_INFO_free(priv);
     GOST_PUBLIC_KEY_INFO_free(pub);
     if (!ok)
+        ERR_print_errors_fp(stderr);
+    if (!ok)
         gost_keymgmt_free(gctx);
+    DEBUG_RESULT("ok=%d", ok);
     return ok;
 }
 
@@ -356,17 +382,24 @@ static int decoder_export_object(void *vctx,
     GOST_DECODER_CTX *ctx = vctx;
     GOST_KEYMGMT_CTX *keydata;
 
+    DEBUG_START();
+    DEBUG_PARAM("reference_sz=%zu", reference_sz);
+
     if (reference_sz != sizeof(keydata))
         return 0;
 
     keydata = *(GOST_KEYMGMT_CTX **)reference;
-    if (keydata == NULL)
+    if (keydata == NULL) {
+        DEBUG_RESULT("no keydata");
         return 0;
+    }
 
     if (ctx->selection == 0)
         ctx->selection = OSSL_KEYMGMT_SELECT_ALL;
 
-    return gost_export(keydata, ctx->selection, export_cb, export_cbarg);
+    int ret = gost_export(keydata, ctx->selection, export_cb, export_cbarg);
+    DEBUG_RESULT("ret=%d", ret);
+    return ret;
 }
 
 
@@ -474,11 +507,14 @@ typedef void (*fptr_t)(void);
 #define MAKE_DECODER_FUNCTIONS(alg, fmt, ispemflag, selflag, suffix)        \
     static void *alg##_##fmt##_##suffix##_decoder_newctx(void *provctx)    \
     {                                                                      \
+        DEBUG_START();                                                     \
+        DEBUG_PARAM("newctx %s_%s_%s", #alg, #fmt, #suffix);             \
         GOST_DECODER_CTX *ctx = decoder_newctx(provctx);                   \
         if (ctx != NULL) {                                                 \
             ctx->ispem = ispemflag;                                        \
             ctx->selection = selflag;                                      \
         }                                                                  \
+        DEBUG_RESULT("ctx=%p", ctx);                                     \
         return ctx;                                                        \
     }                                                                      \
     static const OSSL_DISPATCH alg##_##fmt##_##suffix##_decoder_functions[] = { \
