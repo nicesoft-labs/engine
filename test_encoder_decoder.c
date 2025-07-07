@@ -70,11 +70,16 @@ int main(void)
         T(info != NULL);
         der_len = i2d_GOST_PUBLIC_KEY_INFO(info, &der);
         T(der_len > 0 && der != NULL);
-        FILE *f = fopen("gost_pub.der", "wb");
-        if (f != NULL) {
-            fwrite(der, 1, der_len, f);
-            fclose(f);
+        /* Optional debug output of generated DER */
+#ifdef ENABLE_GOST_DEBUG
+        {
+            FILE *f = fopen("gost_pub.der", "wb");
+            if (f != NULL) {
+                fwrite(der, 1, der_len, f);
+                fclose(f);
+            }
         }
+#endif
         p = der;
         info2 = d2i_GOST_PUBLIC_KEY_INFO(NULL, &p, der_len);
         T(info2 != NULL);
@@ -82,7 +87,7 @@ int main(void)
         OPENSSL_free(der);
         GOST_PUBLIC_KEY_INFO_free(info);
         DBG("GOST_PUBLIC_KEY_INFO encode/decode OK");
-        return 0;
+        /* continue with provider encoder/decoder cycle */
     }
 
     {
