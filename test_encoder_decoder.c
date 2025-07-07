@@ -26,12 +26,28 @@
         goto err;                                                           \
     }
 
+static const char *alg_nid2name(int nid)
+{
+    switch (nid) {
+    case NID_id_GostR3410_2001:
+        return "gost2001";
+    case NID_id_GostR3410_2012_256:
+        return "gost2012_256";
+    case NID_id_GostR3410_2012_512:
+        return "gost2012_512";
+    }
+    return NULL;
+}
+
+
 int main(void)
 {
     int ret = 1;
     OSSL_PROVIDER *defprov = NULL, *gostprov = NULL;
     EVP_PKEY_CTX *ctx = NULL;
     EVP_PKEY *key = NULL;
+    int param_nid = NID_id_tc26_gost_3410_2012_256_paramSetA;
+
 
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
@@ -52,7 +68,6 @@ int main(void)
 
     /* Check direct GOST_PUBLIC_KEY_INFO encode/decode */
     {
-        int param_nid = NID_id_tc26_gost_3410_2012_256_paramSetA;
         EC_KEY *ec = EC_KEY_new();
         GOST_PUBLIC_KEY_INFO *info = NULL;
         unsigned char *der = NULL;
@@ -143,6 +158,31 @@ int main(void)
                 int eqres = EVP_PKEY_eq(key, kder);
                 DBG("EVP_PKEY_eq returned: %d", eqres);
                 T(eqres);
+                if (selection == OSSL_KEYMGMT_SELECT_PUBLIC_KEY) {
+                    char gname[80];
+                    size_t gname_len = 0;
+                    int gnid;
+                    const char *type_name;
+                    const char *expected_type;
+                    unsigned char pubbuf[256];
+                    size_t pub_len = 0;
+
+                    T(EVP_PKEY_get_utf8_string_param(kder, OSSL_PKEY_PARAM_GROUP_NAME,
+                                                    gname, sizeof(gname), &gname_len));
+                    gnid = OBJ_sn2nid(gname);
+                    if (gnid == NID_undef)
+                        gnid = OBJ_txt2nid(gname);
+                    T(gnid == param_nid);
+
+                    type_name = EVP_PKEY_get0_type_name(kder);
+                    expected_type = alg_nid2name(gost_param_nid_to_alg_nid(param_nid));
+                    T(type_name != NULL && expected_type != NULL &&
+                      strcmp(type_name, expected_type) == 0);
+
+                    T(EVP_PKEY_get_octet_string_param(kder, OSSL_PKEY_PARAM_PUB_KEY,
+                                                     pubbuf, sizeof(pubbuf), &pub_len));
+                    T(pub_len > 0);
+                }
             }
             ctx = EVP_PKEY_CTX_new_from_pkey(NULL, kder, NULL);
             T(ctx != NULL);
@@ -187,6 +227,31 @@ int main(void)
                 int eqres = EVP_PKEY_eq(key, kpem);
                 DBG("EVP_PKEY_eq returned: %d", eqres);
                 T(eqres);
+                if (selection == OSSL_KEYMGMT_SELECT_PUBLIC_KEY) {
+                    char gname[80];
+                    size_t gname_len = 0;
+                    int gnid;
+                    const char *type_name;
+                    const char *expected_type;
+                    unsigned char pubbuf[256];
+                    size_t pub_len = 0;
+
+                    T(EVP_PKEY_get_utf8_string_param(kpem, OSSL_PKEY_PARAM_GROUP_NAME,
+                                                    gname, sizeof(gname), &gname_len));
+                    gnid = OBJ_sn2nid(gname);
+                    if (gnid == NID_undef)
+                        gnid = OBJ_txt2nid(gname);
+                    T(gnid == param_nid);
+
+                    type_name = EVP_PKEY_get0_type_name(kpem);
+                    expected_type = alg_nid2name(gost_param_nid_to_alg_nid(param_nid));
+                    T(type_name != NULL && expected_type != NULL &&
+                      strcmp(type_name, expected_type) == 0);
+
+                    T(EVP_PKEY_get_octet_string_param(kpem, OSSL_PKEY_PARAM_PUB_KEY,
+                                                     pubbuf, sizeof(pubbuf), &pub_len));
+                    T(pub_len > 0);
+                }
             }
             ctx = EVP_PKEY_CTX_new_from_pkey(NULL, kpem, NULL);
             T(ctx != NULL);
