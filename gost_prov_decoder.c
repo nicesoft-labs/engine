@@ -23,26 +23,30 @@
 static void debug_dump_params(const OSSL_PARAM *p)
 {
     DEBUG_LOG(">>>> debug_dump_params: Dumping OSSL_PARAM");
+    if (p == NULL) {
+        DEBUG_LOG(">>>> debug_dump_params: params is NULL");
+        return;
+    }
     for (; p != NULL && p->key != NULL; p++) {
         switch (p->data_type) {
         case OSSL_PARAM_UTF8_STRING:
         case OSSL_PARAM_UTF8_PTR:
-            DEBUG_LOG("param %s = %s", p->key, (char *)p->data);
+            DEBUG_LOG("param %s = %s", p->key, p->data ? (char *)p->data : "NULL");
             break;
         case OSSL_PARAM_INTEGER:
             if (p->data_size == sizeof(int))
-                DEBUG_LOG("param %s = %d", p->key, *(int *)p->data);
+                DEBUG_LOG("param %s = %d", p->key, p->data ? *(int *)p->data : 0);
             else
                 DEBUG_LOG("param %s integer size=%zu", p->key, p->data_size);
             break;
         case OSSL_PARAM_UNSIGNED_INTEGER:
             if (p->data_size == sizeof(unsigned int))
-                DEBUG_LOG("param %s = %u", p->key, *(unsigned int *)p->data);
+                DEBUG_LOG("param %s = %u", p->key, p->data ? *(unsigned int *)p->data : 0);
             else
                 DEBUG_LOG("param %s uinteger size=%zu", p->key, p->data_size);
             break;
         default:
-            DEBUG_LOG("param %s type=%u size=%zu", p->key, p->data_type, p->data_size);
+            DEBUG_LOG("param %s type=%u size=%zu data=%p", p->key, p->data_type, p->data_size, p->data);
             break;
         }
     }
@@ -55,12 +59,6 @@ static void debug_dump_params(const OSSL_PARAM *p)
 }
 #endif
 
-/*
- * Very small and simplified DECODER implementation. This is
- * currently just enough to import a PKCS#8 or SubjectPublicKeyInfo
- * structure and create a GOST_KEYMGMT_CTX from it.
- */
-
 typedef struct {
     PROV_CTX *provctx;
     int ispem;        /* 0 = DER input, 1 = PEM input */
@@ -70,7 +68,7 @@ typedef struct {
 
 static void *decoder_newctx(void *provctx)
 {
-    DEBUG_LOG(">>>> decoder_newctx: Creating new GOST_DECODER_CTX");
+    DEBUG_LOG(">>>> decoder_newctx: Creating new GOST_DECODER_CTX for provctx=%p", provctx);
     GOST_DECODER_CTX *ctx = OPENSSL_zalloc(sizeof(*ctx));
     if (ctx == NULL) {
         DEBUG_LOG(">>>> decoder_newctx: Failed to allocate ctx");
@@ -90,7 +88,7 @@ static void decoder_freectx(void *vctx)
 /* Map parameter set NID to algorithm NID */
 static int param_to_alg_nid(int param_nid)
 {
-    DEBUG_LOG(">>>> param_to_alg_nid: Mapping param_nid=%d", param_nid);
+    DEBUG_LOG(">>>> param_to_alg_nid: Mapping param_nid=%d (%s)", param_nid, OBJ_nid2sn(param_nid));
     switch (param_nid) {
     case NID_id_GostR3410_2001_CryptoPro_A_ParamSet:
     case NID_id_GostR3410_2001_CryptoPro_B_ParamSet:
@@ -112,7 +110,7 @@ static int param_to_alg_nid(int param_nid)
     case NID_id_tc26_gost_3410_2012_512_paramSetB:
     case NID_id_tc26_gost_3410_2012_512_paramSetC:
         DEBUG_LOG(">>>> param_to_alg_nid: Returning NID_id_GostR3410_2012_512=%d", NID_id_GostR3410_2012_512);
-        return  NID_id_GostR3410_2012_512;
+        return NID_id_GostR3410_2012_512;
     }
     DEBUG_LOG(">>>> param_to_alg_nid: Returning NID_undef=%d", NID_undef);
     return NID_undef;
@@ -120,7 +118,7 @@ static int param_to_alg_nid(int param_nid)
 
 static const char *alg_nid2name(int nid)
 {
-    DEBUG_LOG(">>>> alg_nid2name: Mapping nid=%d", nid);
+    DEBUG_LOG(">>>> alg_nid2name: Mapping nid=%d (%s)", nid, OBJ_nid2sn(nid));
     switch (nid) {
     case NID_id_GostR3410_2001:
         DEBUG_LOG(">>>> alg_nid2name: Returning gost2001");
@@ -152,6 +150,7 @@ static int parse_algor(const X509_ALGOR *algor, int *alg_nid, int *param_nid)
     DEBUG_LOG(">>>> parse_algor: Starting with algor=%p", algor);
     if (algor == NULL) {
         DEBUG_LOG(">>>> parse_algor: algor is NULL");
+        ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_DATA);
         return 0;
     }
 
@@ -173,20 +172,29 @@ static int parse_algor(const X509_ALGOR *algor, int *alg_nid, int *param_nid)
         }
     } else {
         DEBUG_LOG(">>>> parse_algor: algobj is NULL");
+        ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_DATA);
         return 0;
     }
 
     if (ptype != V_ASN1_SEQUENCE || pval == NULL) {
         DEBUG_LOG(">>>> parse_algor: Invalid ptype=%d or pval=%p (expected V_ASN1_SEQUENCE)", ptype, pval);
+        ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_DATA);
         return 0;
     }
 
     p = pval->data;
     DEBUG_LOG(">>>> parse_algor: Decoding GOST_KEY_PARAMS, pval->length=%d", pval->length);
+    if (pval->length > 0) {
+        DEBUG_LOG(">>>> parse_algor: First 16 bytes of pval->data:");
+        for (int i = 0; i < pval->length && i < 16; i++)
+            fprintf(stderr, "%02X ", pval->data[i]);
+        fprintf(stderr, "\n");
+    }
     gkp = d2i_GOST_KEY_PARAMS(NULL, &p, pval->length);
     if (gkp == NULL) {
         ERR_raise(ERR_LIB_PROV, PROV_R_BAD_ENCODING);
         DEBUG_LOG(">>>> parse_algor: Failed to decode GOST_KEY_PARAMS");
+        ERR_print_errors_fp(stderr);
         return 0;
     }
 
@@ -201,7 +209,8 @@ static int parse_algor(const X509_ALGOR *algor, int *alg_nid, int *param_nid)
     }
 
     GOST_KEY_PARAMS_free(gkp);
-    DEBUG_LOG(">>>> parse_algor: Success, alg_nid=%d param_nid=%d", *alg_nid, *param_nid);
+    DEBUG_LOG(">>>> parse_algor: Success, alg_nid=%d (%s) param_nid=%d (%s)",
+              *alg_nid, OBJ_nid2sn(*alg_nid), *param_nid, OBJ_nid2sn(*param_nid));
     return 1;
 }
 
@@ -215,12 +224,14 @@ static int read_der_from_bio(GOST_DECODER_CTX *ctx, OSSL_CORE_BIO *cin,
     DEBUG_LOG(">>>> read_der_from_bio: Starting with ctx=%p cin=%p", ctx, cin);
     if (ctx == NULL || cin == NULL) {
         DEBUG_LOG(">>>> read_der_from_bio: Invalid ctx=%p or cin=%p", ctx, cin);
+        ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_DATA);
         return 0;
     }
 
     in = BIO_new_from_core_bio(ctx->provctx->libctx, cin);
     if (in == NULL) {
         DEBUG_LOG(">>>> read_der_from_bio: Failed to create BIO from core_bio");
+        ERR_print_errors_fp(stderr);
         return 0;
     }
     DEBUG_LOG(">>>> read_der_from_bio: ispem=%d", ctx->ispem);
@@ -235,6 +246,7 @@ static int read_der_from_bio(GOST_DECODER_CTX *ctx, OSSL_CORE_BIO *cin,
         OPENSSL_free(header);
         if (!ok) {
             DEBUG_LOG(">>>> read_der_from_bio: Failed to read PEM block");
+            ERR_print_errors_fp(stderr);
             goto end;
         }
 
@@ -258,10 +270,11 @@ static int read_der_from_bio(GOST_DECODER_CTX *ctx, OSSL_CORE_BIO *cin,
         mem = BIO_new(BIO_s_mem());
         if (mem == NULL) {
             DEBUG_LOG(">>>> read_der_from_bio: Failed to create memory BIO");
+            ERR_print_errors_fp(stderr);
             goto end;
         }
 
-        while (BIO_read_ex(in, tbuf, sizeof(tbuf), &n)) {
+        while (BIO_read_ex(in, tbuf, sizeof(tbuf), &n) && n > 0) {
             BIO_write(mem, tbuf, n);
             DEBUG_LOG(">>>> read_der_from_bio: Read %zu bytes from BIO", n);
         }
@@ -278,6 +291,15 @@ static int read_der_from_bio(GOST_DECODER_CTX *ctx, OSSL_CORE_BIO *cin,
         ok = *der != NULL;
         if (!ok) {
             DEBUG_LOG(">>>> read_der_from_bio: Failed to allocate DER buffer");
+            ERR_print_errors_fp(stderr);
+        } else {
+            DEBUG_LOG(">>>> read_der_from_bio: Allocated DER buffer, der_len=%ld", *der_len);
+            if (*der_len > 0) {
+                DEBUG_LOG(">>>> read_der_from_bio: First 32 bytes of DER:");
+                for (size_t i = 0; i < (size_t)*der_len && i < 32; i++)
+                    fprintf(stderr, "%02X ", (*der)[i]);
+                fprintf(stderr, "\n");
+            }
         }
     }
 
@@ -310,10 +332,16 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
     int sel = 0;
 
     DEBUG_LOG(">>>> decoder_decode: Starting with ctx=%p cin=%p selection=%d", vctx, cin, selection);
-    DEBUG_LOG(">>>> decoder_decode: ctx->selection=%d ispem=%d init_selection=%d",
-              ctx->selection, ctx->ispem, ctx->init_selection);
+    DEBUG_LOG(">>>> decoder_decode: ctx->provctx=%p ctx->ispem=%d ctx->selection=%d ctx->init_selection=%d",
+              ctx->provctx, ctx->ispem, ctx->selection, ctx->init_selection);
     DEBUG_LOG(">>>> decoder_decode: data_cb=%p data_cbarg=%p cb=%p cbarg=%p",
               data_cb, data_cbarg, cb, cbarg);
+
+    if (ctx == NULL || cin == NULL) {
+        DEBUG_LOG(">>>> decoder_decode: Invalid ctx=%p or cin=%p", ctx, cin);
+        ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_DATA);
+        goto end;
+    }
 
     if (selection != 0) {
         ctx->selection = selection;
@@ -326,6 +354,7 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
     DEBUG_LOG(">>>> decoder_decode: Processing type=%s structure=%s", type, structure);
 
     /* Read input data */
+    DEBUG_LOG(">>>> decoder_decode: Calling read_der_from_bio");
     if (!read_der_from_bio(ctx, cin, &der, &der_len, &pem_name)) {
         DEBUG_LOG(">>>> decoder_decode: read_der_from_bio failed");
         ERR_print_errors_fp(stderr);
@@ -333,14 +362,9 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
     }
     DEBUG_LOG(">>>> decoder_decode: read_der_from_bio returned der_len=%ld pem_name=%s",
               der_len, pem_name ? pem_name : "NULL");
-    if (der_len > 0) {
-        DEBUG_LOG(">>>> decoder_decode: First 32 bytes of DER:");
-        for (size_t i = 0; i < (size_t)der_len && i < 32; i++)
-            fprintf(stderr, "%02X ", der[i]);
-        fprintf(stderr, "\n");
-    }
 
     /* Create key management context */
+    DEBUG_LOG(">>>> decoder_decode: Creating gctx with gost_keymgmt_new");
     gctx = gost_keymgmt_new(ctx->provctx);
     if (gctx == NULL) {
         DEBUG_LOG(">>>> decoder_decode: gost_keymgmt_new failed");
@@ -391,25 +415,30 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
                     }
                 } else {
                     DEBUG_LOG(">>>> decoder_decode: PKCS8_decrypt_ex failed");
+                    ERR_print_errors_fp(stderr);
                 }
                 if (priv == NULL) {
                     ERR_raise(ERR_LIB_PROV, PROV_R_BAD_DECRYPT);
                     DEBUG_LOG(">>>> decoder_decode: Failed to obtain GOST_PRIVATE_KEY_INFO");
                     goto end;
                 }
+            } else {
+                DEBUG_LOG(">>>> decoder_decode: d2i_X509_SIG returned NULL");
+                ERR_print_errors_fp(stderr);
             }
         } else {
             DEBUG_LOG(">>>> decoder_decode: Successfully decoded GOST_PRIVATE_KEY_INFO priv=%p", priv);
         }
 
-        if (priv != NULL && parse_algor(priv->algor, &alg_nid, &param_nid)) {
-            DEBUG_LOG(">>>> decoder_decode: parse_algor for PrivateKeyInfo succeeded, alg_nid=%d param_nid=%d",
-                      alg_nid, param_nid);
+        if (priv != NULL && parse_algor(priv->algor, &alg_nid, ¶m_nid)) {
+            DEBUG_LOG(">>>> decoder_decode: parse_algor for PrivateKeyInfo succeeded, alg_nid=%d (%s) param_nid=%d (%s)",
+                      alg_nid, OBJ_nid2sn(alg_nid), param_nid, OBJ_nid2sn(param_nid));
             int klen = priv->priv_key->length;
             DEBUG_LOG(">>>> decoder_decode: Private key length=%d", klen);
             privbuf = OPENSSL_malloc(klen);
             if (privbuf == NULL) {
                 DEBUG_LOG(">>>> decoder_decode: Failed to allocate privbuf");
+                ERR_print_errors_fp(stderr);
                 goto end;
             }
             for (int i = 0; i < klen; i++)
@@ -417,16 +446,19 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
             DEBUG_LOG(">>>> decoder_decode: Reversed private key bytes");
             params[pidx++] = OSSL_PARAM_construct_octet_string(OSSL_PKEY_PARAM_PRIV_KEY, privbuf, klen);
             sel |= OSSL_KEYMGMT_SELECT_PRIVATE_KEY;
-            DEBUG_LOG(">>>> decoder_decode: Added private key param, sel=%d", sel);
+            DEBUG_LOG(">>>> decoder_decode: Added private key param, sel=%d pidx=%zu", sel, pidx);
         }
     }
 
     /* Try decoding public key */
     if (priv == NULL && ((ctx->selection & OSSL_KEYMGMT_SELECT_PUBLIC_KEY) != 0 || ctx->selection == 0)) {
         DEBUG_LOG(">>>> decoder_decode: Attempting to decode SubjectPublicKeyInfo, der_len=%ld", der_len);
-        for (size_t i = 0; i < (size_t)der_len && i < 32; i++)
-            fprintf(stderr, "%02X ", der[i]);
-        fprintf(stderr, "\n");
+        if (der_len > 0) {
+            DEBUG_LOG(">>>> decoder_decode: First %ld bytes of DER:", der_len < 32 ? der_len : 32);
+            for (size_t i = 0; i < (size_t)der_len && i < 32; i++)
+                fprintf(stderr, "%02X ", der[i]);
+            fprintf(stderr, "\n");
+        }
 #ifdef ENABLE_GOST_DEBUG
         {
             FILE *f = fopen("/tmp/pubkey.der", "wb");
@@ -440,6 +472,7 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
         }
 #endif
         p = der;
+        DEBUG_LOG(">>>> decoder_decode: Calling d2i_GOST_PUBLIC_KEY_INFO with p=%p der_len=%ld", p, der_len);
         pub = d2i_GOST_PUBLIC_KEY_INFO(NULL, &p, der_len);
         if (pub == NULL) {
             DEBUG_LOG(">>>> decoder_decode: d2i_GOST_PUBLIC_KEY_INFO returned NULL");
@@ -449,24 +482,33 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
         DEBUG_LOG(">>>> decoder_decode: Decoded GOST_PUBLIC_KEY_INFO pub=%p", pub);
         DEBUG_LOG(">>>> decoder_decode: pub->algor=%p pub->pub_key=%p pub_key_len=%d",
                   pub->algor, pub->pub_key, pub->pub_key ? pub->pub_key->length : 0);
-        int alg_ok = parse_algor(pub->algor, &alg_nid, &param_nid);
-        DEBUG_LOG(">>>> decoder_decode: parse_algor returned %d alg_nid=%d param_nid=%d", alg_ok, alg_nid, param_nid);
+        int alg_ok = parse_algor(pub->algor, &alg_nid, ¶m_nid);
+        DEBUG_LOG(">>>> decoder_decode: parse_algor returned %d alg_nid=%d (%s) param_nid=%d (%s)",
+                  alg_ok, alg_nid, OBJ_nid2sn(alg_nid), param_nid, OBJ_nid2sn(param_nid));
         if (alg_ok && pub->pub_key != NULL && pub->pub_key->length > 0) {
             params[pidx++] = OSSL_PARAM_construct_octet_string(OSSL_PKEY_PARAM_PUB_KEY,
                                                               pub->pub_key->data,
                                                               pub->pub_key->length);
             sel |= OSSL_KEYMGMT_SELECT_PUBLIC_KEY;
-            DEBUG_LOG(">>>> decoder_decode: Added public key param, sel=%d pub_key_len=%d",
-                      sel, pub->pub_key->length);
+            DEBUG_LOG(">>>> decoder_decode: Added public key param, sel=%d pidx=%zu pub_key_len=%d",
+                      sel, pidx, pub->pub_key->length);
+            if (pub->pub_key->length > 0) {
+                DEBUG_LOG(">>>> decoder_decode: First %d bytes of pub_key:", pub->pub_key->length < 16 ? pub->pub_key->length : 16);
+                for (int i = 0; i < pub->pub_key->length && i < 16; i++)
+                    fprintf(stderr, "%02X ", pub->pub_key->data[i]);
+                fprintf(stderr, "\n");
+            }
         } else {
             DEBUG_LOG(">>>> decoder_decode: Invalid public key data or parse_algor failed");
+            ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_DATA);
             goto end;
         }
     }
 
     if (alg_nid == NID_undef || param_nid == NID_undef) {
         ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_DATA);
-        DEBUG_LOG(">>>> decoder_decode: Invalid alg_nid=%d or param_nid=%d", alg_nid, param_nid);
+        DEBUG_LOG(">>>> decoder_decode: Invalid alg_nid=%d (%s) or param_nid=%d (%s)",
+                  alg_nid, OBJ_nid2sn(alg_nid), param_nid, OBJ_nid2sn(param_nid));
         goto end;
     }
 
@@ -491,6 +533,7 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
         goto end;
     }
 
+    DEBUG_LOG(">>>> decoder_decode: Calling gost_import with gctx=%p sel=%d", gctx, sel);
     if (!gost_import(gctx, sel, params)) {
         DEBUG_LOG(">>>> decoder_decode: gost_import failed");
         ERR_print_errors_fp(stderr);
@@ -498,9 +541,10 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
     }
     if (gctx->ec == NULL) {
         DEBUG_LOG(">>>> decoder_decode: gctx->ec is NULL after import");
+        ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_DATA);
         goto end;
     }
-    DEBUG_LOG(">>>> decoder_decode: Key import successful");
+    DEBUG_LOG(">>>> decoder_decode: Key import successful, gctx->ec=%p", gctx->ec);
 
     {
         int objtype = OSSL_OBJECT_PKEY;
@@ -512,8 +556,13 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
         out[3] = OSSL_PARAM_construct_end();
         DEBUG_LOG(">>>> decoder_decode: Output params constructed");
         debug_dump_params(out);
+        DEBUG_LOG(">>>> decoder_decode: Calling data_cb with out=%p data_cbarg=%p", out, data_cbarg);
         ok = data_cb(out, data_cbarg);
         DEBUG_LOG(">>>> decoder_decode: data_cb returned ok=%d", ok);
+        if (!ok) {
+            DEBUG_LOG(">>>> decoder_decode: data_cb failed");
+            ERR_print_errors_fp(stderr);
+        }
     }
 
 end:
@@ -575,6 +624,7 @@ static int decoder_export_object(void *vctx, const void *reference, size_t refer
         DEBUG_LOG(">>>> decoder_export_object: Set ctx->selection to OSSL_KEYMGMT_SELECT_ALL");
     }
 
+    DEBUG_LOG(">>>> decoder_export_object: Calling gost_export with selection=%d", ctx->selection);
     int ret = gost_export(keydata, ctx->selection, export_cb, export_cbarg);
     DEBUG_LOG(">>>> decoder_export_object: gost_export returned ret=%d", ret);
     return ret;
@@ -713,7 +763,7 @@ typedef void (*fptr_t)(void);
 #define MAKE_DECODER_FUNCTIONS(alg, fmt, ispemflag, selflag, suffix)        \
     static void *alg##_##fmt##_##suffix##_decoder_newctx(void *provctx)    \
     {                                                                      \
-        DEBUG_LOG(">>>> %s_%s_%s_decoder_newctx: Starting", #alg, #fmt, #suffix); \
+        DEBUG_LOG(">>>> %s_%s_%s_decoder_newctx: Starting with provctx=%p", #alg, #fmt, #suffix, provctx); \
         GOST_DECODER_CTX *ctx = decoder_newctx(provctx);                   \
         if (ctx != NULL) {                                                 \
             ctx->ispem = ispemflag;                                        \
@@ -728,8 +778,8 @@ typedef void (*fptr_t)(void);
     static int alg##_##fmt##_##suffix##_decoder_does_selection(            \
         void *provctx, int selection)                                     \
     {                                                                      \
-        DEBUG_LOG(">>>> %s_%s_%s_decoder_does_selection: Starting with selection=%d", \
-                  #alg, #fmt, #suffix, selection);                         \
+        DEBUG_LOG(">>>> %s_%s_%s_decoder_does_selection: Starting with provctx=%p selection=%d", \
+                  #alg, #fmt, #suffix, provctx, selection);              \
         int result;                                                        \
         if (selection == 0 || selflag == 0)                                \
             result = 1;                                                    \
