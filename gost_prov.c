@@ -114,11 +114,14 @@ static const OSSL_ALGORITHM *gost_operation(void *vprovctx,
         ret = GOST_prov_macs;
         break;
     case OSSL_OP_KEYMGMT:
-        return GOST_prov_keymgmts;
+        ret = GOST_prov_keymgmts;
+        break;
     case OSSL_OP_ENCODER:
-        return GOST_prov_encoders;
+        ret = GOST_prov_encoders;
+        break;
     case OSSL_OP_DECODER:
-        return GOST_prov_decoders;
+        ret = GOST_prov_decoders;
+        break;
     }
     DEBUG_RESULT("ret=%p", ret);
     return ret;
