@@ -526,10 +526,23 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
         goto end;
     }
 
-    keytype = alg_nid2name(param_to_alg_nid(param_nid));
+    /* Try to get the key type name directly from the algorithm NID */
+    keytype = alg_nid2name(alg_nid);
+    DEBUG_LOG(">>>> decoder_decode: alg_nid=%d keytype=%s", alg_nid,
+              keytype != NULL ? keytype : "(null)");
+
+    /* Fallback to mapping the parameter set to an algorithm NID */
+    if (keytype == NULL && param_nid != NID_undef) {
+        int mapped_nid = param_to_alg_nid(param_nid);
+        DEBUG_LOG(">>>> decoder_decode: mapped param_nid=%d to alg_nid=%d",
+                  param_nid, mapped_nid);
+        keytype = alg_nid2name(mapped_nid);
+    }
+
     if (keytype == NULL) {
         ERR_raise(ERR_LIB_PROV, PROV_R_NOT_SUPPORTED);
-        DEBUG_LOG(">>>> decoder_decode: alg_nid2name returned NULL for param_nid=%d", param_nid);
+        DEBUG_LOG(">>>> decoder_decode: Failed to determine keytype for alg_nid=%d param_nid=%d",
+                  alg_nid, param_nid);
         goto end;
     }
     DEBUG_LOG(">>>> decoder_decode: keytype=%s", keytype);
