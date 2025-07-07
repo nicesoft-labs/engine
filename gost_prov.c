@@ -211,6 +211,7 @@ int OSSL_provider_init(const OSSL_CORE_HANDLE *core,
     if ((*vprovctx = provider_ctx_new(core, in)) == NULL) {
         DEBUG_RESULT("provider_ctx_new failed");
         return 0;
+    }
     *out = provider_functions;
     ret = 1;
     DEBUG_RESULT("out=%p provctx=%p ret=%d", *out, *vprovctx, ret);
