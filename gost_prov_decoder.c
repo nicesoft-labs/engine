@@ -19,6 +19,41 @@
 # define OSSL_DECODER_PARAM_STRUCTURE "structure"
 #endif
 
+#ifdef ENABLE_GOST_DEBUG
+static void debug_dump_params(const OSSL_PARAM *p)
+{
+    for (; p != NULL && p->key != NULL; p++) {
+        switch (p->data_type) {
+        case OSSL_PARAM_UTF8_STRING:
+        case OSSL_PARAM_UTF8_PTR:
+            DEBUG_LOG("param %s = %s", p->key, (char *)p->data);
+            break;
+        case OSSL_PARAM_INTEGER:
+            if (p->data_size == sizeof(int))
+                DEBUG_LOG("param %s = %d", p->key, *(int *)p->data);
+            else
+                DEBUG_LOG("param %s integer size=%zu", p->key, p->data_size);
+            break;
+        case OSSL_PARAM_UNSIGNED_INTEGER:
+            if (p->data_size == sizeof(unsigned int))
+                DEBUG_LOG("param %s = %u", p->key, *(unsigned int *)p->data);
+            else
+                DEBUG_LOG("param %s uinteger size=%zu", p->key, p->data_size);
+            break;
+        default:
+            DEBUG_LOG("param %s type=%u size=%zu", p->key, p->data_type,
+                      p->data_size);
+            break;
+        }
+    }
+}
+#else
+static void debug_dump_params(const OSSL_PARAM *p)
+{
+    (void)p;
+}
+#endif
+
 /*
  * Very small and simplified DECODER implementation.  This is
  * currently just enough to import a PKCS#8 or SubjectPublicKeyInfo
@@ -390,19 +425,21 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
         ERR_print_errors_fp(stderr);
         goto end;
     }
+    if (gctx->ec == NULL)
+        goto end;
     DEBUG_RESULT("import ok");
 
     {
         int objtype = OSSL_OBJECT_PKEY;
-        void *ref = gctx;
         OSSL_PARAM out[4];
 
         out[0] = OSSL_PARAM_construct_int(OSSL_OBJECT_PARAM_TYPE, &objtype);
         out[1] = OSSL_PARAM_construct_utf8_string(OSSL_OBJECT_PARAM_DATA_TYPE,
                                                  (char *)keytype, 0);
         out[2] = OSSL_PARAM_construct_octet_string(OSSL_OBJECT_PARAM_REFERENCE,
-                                                  &ref, sizeof(ref));
+                                                  &gctx, sizeof(gctx));
         out[3] = OSSL_PARAM_construct_end();
+        debug_dump_params(out);
 
         ok = data_cb(out, data_cbarg);
     }
@@ -437,7 +474,7 @@ static int decoder_export_object(void *vctx,
         return 0;
 
     keydata = *(GOST_KEYMGMT_CTX **)reference;
-    if (keydata == NULL) {
+    if (keydata == NULL || keydata->ec == NULL) {
         DEBUG_RESULT("no keydata");
         return 0;
     }
