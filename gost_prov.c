@@ -98,13 +98,21 @@ static const OSSL_ALGORITHM *gost_operation(void *vprovctx,
                                                 int operation_id,
                                                 const int *no_cache)
 {
+    const OSSL_ALGORITHM *ret = NULL;
+
+    DEBUG_START();
+    DEBUG_PARAM("operation_id=%d", operation_id);
+    
     switch (operation_id) {
     case OSSL_OP_CIPHER:
-        return GOST_prov_ciphers;
+        ret = GOST_prov_ciphers;
+        break;
     case OSSL_OP_DIGEST:
-        return GOST_prov_digests;
+        ret = GOST_prov_digests;
+        break;
     case OSSL_OP_MAC:
-        return GOST_prov_macs;
+        ret = GOST_prov_macs;
+        break;
     case OSSL_OP_KEYMGMT:
         return GOST_prov_keymgmts;
     case OSSL_OP_ENCODER:
@@ -112,19 +120,31 @@ static const OSSL_ALGORITHM *gost_operation(void *vprovctx,
     case OSSL_OP_DECODER:
         return GOST_prov_decoders;
     }
-    return NULL;
+    DEBUG_RESULT("ret=%p", ret);
+    return ret;
 }
 
 static int gost_get_params(void *provctx, OSSL_PARAM *params)
 {
     OSSL_PARAM *p;
 
+    DEBUG_START();
+    DEBUG_PARAM("provctx=%p", provctx);
+
     p = OSSL_PARAM_locate(params, OSSL_PROV_PARAM_NAME);
     if (p != NULL && !OSSL_PARAM_set_utf8_ptr(p, "OpenSSL GOST Provider"))
-        return 0;
+        {
+            DEBUG_RESULT("failed setting %s", OSSL_PROV_PARAM_NAME);
+            return 0;
+        }
     p = OSSL_PARAM_locate(params, OSSL_PROV_PARAM_STATUS);
     if (p != NULL && !OSSL_PARAM_set_int(p, 1)) /* We never fail. */
-        return 0;
+        {
+            DEBUG_RESULT("failed setting %s", OSSL_PROV_PARAM_STATUS);
+            return 0;
+        }
+
+    DEBUG_RESULT("success");
 
     return 1;
 }
@@ -134,16 +154,22 @@ static const OSSL_ITEM *gost_get_reason_strings(void *provctx)
 #if 0
     return reason_strings;
 #endif
+    DEBUG_START();
+    DEBUG_PARAM("provctx=%p", provctx);
+    DEBUG_RESULT("returning GOST_str_reasons=%p", GOST_str_reasons);
     return (OSSL_ITEM *)GOST_str_reasons;
 }
 
 /* The function that tears down this provider */
 static void gost_teardown(void *vprovctx)
 {
+    DEBUG_START();
+    DEBUG_PARAM("provctx=%p", vprovctx);
     GOST_prov_deinit_ciphers();
     GOST_prov_deinit_digests();
     GOST_prov_deinit_mac_digests();
     provider_ctx_free(vprovctx);
+    DEBUG_RESULT("teardown complete");
 }
 
 /* The base dispatch table */
@@ -176,8 +202,17 @@ int OSSL_provider_init(const OSSL_CORE_HANDLE *core,
                        const OSSL_DISPATCH **out,
                        void **vprovctx)
 {
-    if ((*vprovctx = provider_ctx_new(core, in)) == NULL)
+    int ret = 0;
+
+    DEBUG_START();
+    DEBUG_PARAM("core=%p", core);
+    DEBUG_PARAM("in=%p", in);
+
+    if ((*vprovctx = provider_ctx_new(core, in)) == NULL) {
+        DEBUG_RESULT("provider_ctx_new failed");
         return 0;
     *out = provider_functions;
-    return 1;
+    ret = 1;
+    DEBUG_RESULT("out=%p provctx=%p ret=%d", *out, *vprovctx, ret);
+    return ret;
 }
