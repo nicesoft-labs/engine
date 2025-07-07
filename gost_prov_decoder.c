@@ -520,9 +520,16 @@ typedef void (*fptr_t)(void);
     static int alg##_##fmt##_##suffix##_decoder_does_selection(            \
         void *provctx, int selection)                                     \
     {                                                                      \
+        int result;                                                        \
+        (void)provctx;                                                     \
+        DEBUG_START();                                                     \
+        DEBUG_PARAM("selflag=%d selection=%d", selflag, selection);       \
         if (selection == 0 || selflag == 0)                                \
-            return 1;                                                      \
-        return (selection & selflag) == selection;                         \
+            result = 1;                                                    \
+        else                                                               \
+            result = (selection & selflag) != 0;                           \
+        DEBUG_RESULT("result=%d", result);                                \
+        return result;                                                     \
     }                                                                      \
     static const OSSL_DISPATCH alg##_##fmt##_##suffix##_decoder_functions[] = { \
         { OSSL_FUNC_DECODER_NEWCTX,                                         \
