@@ -548,8 +548,9 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
 
         if (priv != NULL && parse_algor(priv->algor, &alg_nid, &param_nid)) {
             if (ctx->expected_alg_nid != NID_undef && alg_nid != ctx->expected_alg_nid) {
-                ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_DATA);
-                goto end;
+                /* unsupported algorithm for this decoder: skip it silently */
+                ERR_clear_error();
+                return 0;
             }
             DEBUG_LOG(">>>> decoder_decode: parse_algor for PrivateKeyInfo succeeded, alg_nid=%d (%s) param_nid=%d (%s)",
                       alg_nid, OBJ_nid2sn(alg_nid), param_nid, OBJ_nid2sn(param_nid));
@@ -604,8 +605,9 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
                   pub->algor, pub->pub_key, pub->pub_key ? pub->pub_key->length : 0);
         int alg_ok = parse_algor(pub->algor, &alg_nid, &param_nid);
         if (alg_ok && ctx->expected_alg_nid != NID_undef && alg_nid != ctx->expected_alg_nid) {
-            ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_DATA);
-            goto end;
+            /* unsupported algorithm for this decoder: skip it silently */
+            ERR_clear_error();
+            return 0;
         }
         DEBUG_LOG(">>>> decoder_decode: parse_algor returned %d alg_nid=%d (%s) param_nid=%d (%s)",
                   alg_ok, alg_nid, OBJ_nid2sn(alg_nid), param_nid, OBJ_nid2sn(param_nid));
@@ -812,7 +814,6 @@ static int decoder_get_params(void *vctx, OSSL_PARAM params[])
 {
     GOST_DECODER_CTX *ctx = vctx;
     const char *type = ctx->ispem ? "PEM" : "DER";
-    const char *init_type = ctx->init_ispem_flag ? "PEM" : "DER";
     const char *structure = (ctx->selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0 ?
                             "PrivateKeyInfo" : "SubjectPublicKeyInfo";
     if (ctx->selection == 0)
