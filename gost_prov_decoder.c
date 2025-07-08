@@ -62,12 +62,13 @@ static void debug_dump_params(const OSSL_PARAM *p)
 typedef struct {
     PROV_CTX *provctx;
     int ispem;        /* 0 = DER input, 1 = PEM input */
+    int init_ispem_flag; /* исходный режим: 0=DER, 1=PEM */
     int selection;    /* expected key selection */
     int init_selection; /* initial selection from newctx */
     int expected_alg_nid; /* NID алгоритма, который этот декодер обязан принимать */
 } GOST_DECODER_CTX;
 
-static void *decoder_newctx(void *provctx, int expected_alg_nid)
+static void *decoder_newctx(void *provctx, int expected_alg_nid, int ispem_flag)
 {
     DEBUG_LOG(">>>> decoder_newctx: Creating new GOST_DECODER_CTX for provctx=%p", provctx);
     GOST_DECODER_CTX *ctx = OPENSSL_zalloc(sizeof(*ctx));
@@ -77,6 +78,7 @@ static void *decoder_newctx(void *provctx, int expected_alg_nid)
     }
     ctx->provctx = provctx;
     ctx->expected_alg_nid = expected_alg_nid;
+    (void)ispem_flag; /* ispem_flag stored by wrapper */
     DEBUG_LOG(">>>> decoder_newctx: ctx=%p provctx=%p", ctx, provctx);
     return ctx;
 }
@@ -90,53 +92,89 @@ static void decoder_freectx(void *vctx)
 /* Wrapper functions to specify expected algorithm NID for each decoder */
 static void *gost2001_der_priv_decoder_newctx_base(void *provctx)
 {
-    return decoder_newctx(provctx, NID_id_GostR3410_2001);
+    GOST_DECODER_CTX *ctx = decoder_newctx(provctx, NID_id_GostR3410_2001, 0);
+    if (ctx != NULL)
+        ctx->init_ispem_flag = 0;
+    return ctx;
 }
 static void *gost2001_der_pub_decoder_newctx_base(void *provctx)
 {
-    return decoder_newctx(provctx, NID_id_GostR3410_2001);
+    GOST_DECODER_CTX *ctx = decoder_newctx(provctx, NID_id_GostR3410_2001, 0);
+    if (ctx != NULL)
+        ctx->init_ispem_flag = 0;
+    return ctx;
 }
 static void *gost2001_pem_priv_decoder_newctx_base(void *provctx)
 {
-    return decoder_newctx(provctx, NID_id_GostR3410_2001);
+    GOST_DECODER_CTX *ctx = decoder_newctx(provctx, NID_id_GostR3410_2001, 1);
+    if (ctx != NULL)
+        ctx->init_ispem_flag = 1;
+    return ctx;
 }
 static void *gost2001_pem_pub_decoder_newctx_base(void *provctx)
 {
-    return decoder_newctx(provctx, NID_id_GostR3410_2001);
+    GOST_DECODER_CTX *ctx = decoder_newctx(provctx, NID_id_GostR3410_2001, 1);
+    if (ctx != NULL)
+        ctx->init_ispem_flag = 1;
+    return ctx;
 }
 
 static void *gost2012_256_der_priv_decoder_newctx_base(void *provctx)
 {
-    return decoder_newctx(provctx, NID_id_GostR3410_2012_256);
+    GOST_DECODER_CTX *ctx = decoder_newctx(provctx, NID_id_GostR3410_2012_256, 0);
+    if (ctx != NULL)
+        ctx->init_ispem_flag = 0;
+    return ctx;
 }
 static void *gost2012_256_der_pub_decoder_newctx_base(void *provctx)
 {
-    return decoder_newctx(provctx, NID_id_GostR3410_2012_256);
+    GOST_DECODER_CTX *ctx = decoder_newctx(provctx, NID_id_GostR3410_2012_256, 0);
+    if (ctx != NULL)
+        ctx->init_ispem_flag = 0;
+    return ctx;
 }
 static void *gost2012_256_pem_priv_decoder_newctx_base(void *provctx)
 {
-    return decoder_newctx(provctx, NID_id_GostR3410_2012_256);
+    GOST_DECODER_CTX *ctx = decoder_newctx(provctx, NID_id_GostR3410_2012_256, 1);
+    if (ctx != NULL)
+        ctx->init_ispem_flag = 1;
+    return ctx;
 }
 static void *gost2012_256_pem_pub_decoder_newctx_base(void *provctx)
 {
-    return decoder_newctx(provctx, NID_id_GostR3410_2012_256);
+    GOST_DECODER_CTX *ctx = decoder_newctx(provctx, NID_id_GostR3410_2012_256, 1);
+    if (ctx != NULL)
+        ctx->init_ispem_flag = 1;
+    return ctx;
 }
 
 static void *gost2012_512_der_priv_decoder_newctx_base(void *provctx)
 {
-    return decoder_newctx(provctx, NID_id_GostR3410_2012_512);
+    GOST_DECODER_CTX *ctx = decoder_newctx(provctx, NID_id_GostR3410_2012_512, 0);
+    if (ctx != NULL)
+        ctx->init_ispem_flag = 0;
+    return ctx;
 }
 static void *gost2012_512_der_pub_decoder_newctx_base(void *provctx)
 {
-    return decoder_newctx(provctx, NID_id_GostR3410_2012_512);
+    GOST_DECODER_CTX *ctx = decoder_newctx(provctx, NID_id_GostR3410_2012_512, 0);
+    if (ctx != NULL)
+        ctx->init_ispem_flag = 0;
+    return ctx;
 }
 static void *gost2012_512_pem_priv_decoder_newctx_base(void *provctx)
 {
-    return decoder_newctx(provctx, NID_id_GostR3410_2012_512);
+    GOST_DECODER_CTX *ctx = decoder_newctx(provctx, NID_id_GostR3410_2012_512, 1);
+    if (ctx != NULL)
+        ctx->init_ispem_flag = 1;
+    return ctx;
 }
 static void *gost2012_512_pem_pub_decoder_newctx_base(void *provctx)
 {
-    return decoder_newctx(provctx, NID_id_GostR3410_2012_512);
+    GOST_DECODER_CTX *ctx = decoder_newctx(provctx, NID_id_GostR3410_2012_512, 1);
+    if (ctx != NULL)
+        ctx->init_ispem_flag = 1;
+    return ctx;
 }
 
 
@@ -413,6 +451,7 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
     }
 
     const char *type = ctx->ispem ? "PEM" : "DER";
+    const char *init_type = ctx->init_ispem_flag ? "PEM" : "DER";
     const char *structure = (ctx->selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0 ?
                             "PrivateKeyInfo" : "SubjectPublicKeyInfo";
     DEBUG_LOG(">>>> decoder_decode: Processing type=%s structure=%s", type, structure);
@@ -806,6 +845,8 @@ static int decoder_set_ctx_params(void *vctx, const OSSL_PARAM params[])
     const char *type = ctx->ispem ? "PEM" : "DER";
     const char *structure = (ctx->selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0 ?
                             "PrivateKeyInfo" : "SubjectPublicKeyInfo";
+    const char *init_structure = (ctx->init_selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0 ?
+                                "PrivateKeyInfo" : "SubjectPublicKeyInfo";
     const OSSL_PARAM *p;
 
     DEBUG_LOG(">>>> decoder_set_ctx_params: ctx=%p selection=%d ispem=%d",
@@ -826,9 +867,8 @@ static int decoder_set_ctx_params(void *vctx, const OSSL_PARAM params[])
             return 0;
         }
         DEBUG_LOG(">>>> decoder_set_ctx_params: input_type=%s", t);
-        if (OPENSSL_strcasecmp(t, type) != 0) {
-            DEBUG_LOG(">>>> decoder_set_ctx_params: Ignoring mismatched input_type %s, expected %s", t, type);
-        }
+        if (OPENSSL_strcasecmp(t, init_type) != 0)
+            return 0;
     }
 
     p = OSSL_PARAM_locate_const(params, OSSL_DECODER_PARAM_STRUCTURE);
@@ -839,9 +879,8 @@ static int decoder_set_ctx_params(void *vctx, const OSSL_PARAM params[])
             return 0;
         }
         DEBUG_LOG(">>>> decoder_set_ctx_params: structure_param=%s", s);
-        if (OPENSSL_strcasecmp(s, structure) != 0) {
-            DEBUG_LOG(">>>> decoder_set_ctx_params: Ignoring mismatched structure %s, expected %s", s, structure);
-        }
+        if (OPENSSL_strcasecmp(s, init_structure) != 0)
+            return 0;
     }
 
     DEBUG_LOG(">>>> decoder_set_ctx_params: Success");
