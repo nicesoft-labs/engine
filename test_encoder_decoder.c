@@ -188,6 +188,8 @@ int main(void)
             const char *format = NULL;
             unsigned char *der = NULL, *pem = NULL;
             size_t der_len = 0, pem_len = 0;
+            unsigned char der_pub[256];
+            size_t der_pub_len = 0;
             EVP_PKEY *kder = NULL, *kpem = NULL;
             const unsigned char *p = NULL;
             OSSL_ENCODER_CTX *ectx = NULL;
@@ -211,6 +213,22 @@ int main(void)
                 goto err;
             }
             DBG("DER encoded successfully, length: %zu, buffer: %p", der_len, (void *)der);
+            if (!is_priv) {
+                unsigned char *der_copy = OPENSSL_memdup(der, der_len);
+                const unsigned char *q = der_copy;
+                GOST_PUBLIC_KEY_INFO *info_check = NULL;
+
+                DBG("Decoding DER with d2i_GOST_PUBLIC_KEY_INFO");
+                info_check = d2i_GOST_PUBLIC_KEY_INFO(NULL, &q, der_len);
+                T(info_check != NULL);
+
+                der_pub_len = info_check->pub_key->length;
+                T(der_pub_len > 0 && der_pub_len <= sizeof(der_pub));
+                memcpy(der_pub, info_check->pub_key->data, der_pub_len);
+
+                GOST_PUBLIC_KEY_INFO_free(info_check);
+                OPENSSL_free(der_copy);
+            }
 
             DBG("First 16 bytes of DER:");
             for (size_t i = 0; i < der_len && i < 16; i++)
@@ -314,6 +332,10 @@ int main(void)
                         fprintf(stderr, "%02X ", pubbuf[i]);
                     fprintf(stderr, "\n");
                     fflush(stderr);
+                    if (!is_priv) {
+                        T(pub_len == der_pub_len);
+                        T(memcmp(pubbuf, der_pub, pub_len) == 0);
+                    }
                 }
             }
 
@@ -448,6 +470,11 @@ int main(void)
                         fprintf(stderr, "%02X ", pubbuf[i]);
                     fprintf(stderr, "\n");
                     fflush(stderr);
+
+                    if (!is_priv) {
+                        T(pub_len == der_pub_len);
+                        T(memcmp(pubbuf, der_pub, pub_len) == 0);
+                    }
                 }
             }
 
