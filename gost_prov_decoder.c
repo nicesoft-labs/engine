@@ -451,7 +451,6 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
     }
 
     const char *type = ctx->ispem ? "PEM" : "DER";
-    const char *init_type = ctx->init_ispem_flag ? "PEM" : "DER";
     const char *structure = (ctx->selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0 ?
                             "PrivateKeyInfo" : "SubjectPublicKeyInfo";
     DEBUG_LOG(">>>> decoder_decode: Processing type=%s structure=%s", type, structure);
@@ -813,6 +812,7 @@ static int decoder_get_params(void *vctx, OSSL_PARAM params[])
 {
     GOST_DECODER_CTX *ctx = vctx;
     const char *type = ctx->ispem ? "PEM" : "DER";
+    const char *init_type = ctx->init_ispem_flag ? "PEM" : "DER";
     const char *structure = (ctx->selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0 ?
                             "PrivateKeyInfo" : "SubjectPublicKeyInfo";
     if (ctx->selection == 0)
