@@ -228,8 +228,7 @@ int main(void)
                                     structure,            /* "SubjectPublicKeyInfo" или "PrivateKeyInfo" */
                                     "gost2012_256",        /* keytype */
                                     selection,             /* OSSL_KEYMGMT_SELECT_PUBLIC_KEY или _PRIVATE_KEY */
-                                    NULL,                  /* pw_cb */
-                                    NULL,                  /* pw_cbarg */
+                                    NULL,                  /* libctx */
                                     "provider=gostprov");  /* propq */
 
             T(dctx != NULL);
@@ -347,7 +346,6 @@ int main(void)
                                     structure,
                                     "gost2012_256",
                                     selection,
-                                    NULL,
                                     NULL,
                                     "provider=gostprov");
             T(dctx != NULL);
