@@ -224,13 +224,13 @@ int main(void)
             DBG("Creating decoder context: provider=gostprov, selection=%d, structure=%s, format=%s",
                 selection, structure, format);
             dctx = OSSL_DECODER_CTX_new_for_pkey(&kder,
-                                    format,
-                                    structure,
-                                    "gost2012_256",
-                                    selection,
-                                    NULL,      // pw_cb
-                                    NULL,      // pw_cbarg
-                                    "provider=gostprov");  // propq
+                                    "DER",
+                                    structure,            /* "SubjectPublicKeyInfo" или "PrivateKeyInfo" */
+                                    "gost2012_256",        /* keytype */
+                                    selection,             /* OSSL_KEYMGMT_SELECT_PUBLIC_KEY или _PRIVATE_KEY */
+                                    NULL,                  /* pw_cb */
+                                    NULL,                  /* pw_cbarg */
+                                    "provider=gostprov");  /* propq */
 
             T(dctx != NULL);
             DBG("Decoder context created: %p", (void *)dctx);
@@ -342,14 +342,14 @@ int main(void)
             format = "PEM";
             DBG("Creating decoder context for PEM: provider=gostprov, selection=%d, structure=%s, format=%s",
                 selection, structure, format);
- dctx = OSSL_DECODER_CTX_new_for_pkey(&kpem,
-                                     format,
-                                     structure,
-                                     "gost2012_256",
-                                     selection,
-                                     NULL,      // pw_cb
-                                     NULL,      // pw_cbarg
-                                     "provider=gostprov");  // propq
+            dctx = OSSL_DECODER_CTX_new_for_pkey(&kpem,
+                                    "PEM",
+                                    structure,
+                                    "gost2012_256",
+                                    selection,
+                                    NULL,
+                                    NULL,
+                                    "provider=gostprov");
             T(dctx != NULL);
             DBG("Decoder context created: %p", (void *)dctx);
 
