@@ -258,8 +258,9 @@ static int parse_algor(const X509_ALGOR *algor, int *alg_nid, int *param_nid)
              *alg_nid != NID_id_GostR3410_2012_256 &&
              *alg_nid != NID_id_GostR3410_2012_512)) {
             ERR_raise_data(ERR_LIB_PROV, PROV_R_NOT_SUPPORTED,
-                           "unknown algorithm OID %s", OBJ_nid2sn(*alg_nid));
-            DEBUG_LOG(">>>> parse_algor: Unsupported alg_nid=%d", *alg_nid);
+                           "unknown algorithm OID %s", buf);
+            DEBUG_LOG(">>>> parse_algor: Unsupported alg_nid=%d (%s)",
+                      *alg_nid, buf);
             return 0;
         }
     } else {
@@ -269,7 +270,8 @@ static int parse_algor(const X509_ALGOR *algor, int *alg_nid, int *param_nid)
     }
 
     if (ptype != V_ASN1_SEQUENCE || pval == NULL) {
-        DEBUG_LOG(">>>> parse_algor: Invalid ptype=%d or pval=%p (expected V_ASN1_SEQUENCE)", ptype, pval);
+        DEBUG_LOG(">>>> parse_algor: Invalid ptype=%d or pval=%p (expected V_ASN1_SEQUENCE) alg OID=%s",
+                  ptype, pval, buf);
         ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_DATA);
         return 0;
     }
@@ -294,17 +296,22 @@ static int parse_algor(const X509_ALGOR *algor, int *alg_nid, int *param_nid)
     *param_nid = OBJ_obj2nid(gkp->key_params);
     DEBUG_LOG(">>>> parse_algor: key_params OID=%s param_nid=%d (%s)", buf, *param_nid, OBJ_nid2sn(*param_nid));
     if (*param_nid == NID_undef) {
-        ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_CURVE);
-        DEBUG_LOG(">>>> parse_algor: Invalid param_nid=%d", *param_nid);
+        ERR_raise_data(ERR_LIB_PROV, PROV_R_INVALID_CURVE,
+                       "unknown parameter OID %s", buf);
+        DEBUG_LOG(">>>> parse_algor: Invalid param_nid=%d (%s)",
+                  *param_nid, buf);
         GOST_KEY_PARAMS_free(gkp);
         return 0;
     }
     int expected_alg_nid = param_to_alg_nid(*param_nid);
     DEBUG_LOG(">>>> parse_algor: expected_alg_nid=%d (%s) from param_nid=%d", expected_alg_nid, OBJ_nid2sn(expected_alg_nid), *param_nid);
     if (expected_alg_nid != NID_undef && expected_alg_nid != *alg_nid) {
-        ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_DATA);
-        DEBUG_LOG(">>>> parse_algor: alg_nid=%d (%s) does not match expected_alg_nid=%d (%s)",
-                  *alg_nid, OBJ_nid2sn(*alg_nid), expected_alg_nid, OBJ_nid2sn(expected_alg_nid));
+        ERR_raise_data(ERR_LIB_PROV, PROV_R_INVALID_DATA,
+                       "algorithm OID %s does not match parameter OID %s",
+                       OBJ_nid2sn(*alg_nid), buf);
+        DEBUG_LOG(">>>> parse_algor: alg_nid=%d (%s) does not match expected_alg_nid=%d (%s) for param %s",
+                  *alg_nid, OBJ_nid2sn(*alg_nid), expected_alg_nid,
+                  OBJ_nid2sn(expected_alg_nid), buf);
         GOST_KEY_PARAMS_free(gkp);
         return 0;
     }
