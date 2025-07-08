@@ -10,6 +10,7 @@
 #include <openssl/objects.h>
 #include "gost_asn1.h"
 #include "gost_lcl.h"
+#include "gost_prov.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -160,6 +161,8 @@ int main(void)
         info2 = d2i_GOST_PUBLIC_KEY_INFO(NULL, &p, der_len);
         T(info2 != NULL);
         DBG("GOST_PUBLIC_KEY_INFO decoded: %p", (void *)info2);
+        if (info2 != NULL && info2->pub_key != NULL)
+            DBG("bits_unused after decode: %ld", info2->pub_key->flags & 0x7);
 
         DBG("Freeing decoded GOST_PUBLIC_KEY_INFO");
         GOST_PUBLIC_KEY_INFO_free(info2);
