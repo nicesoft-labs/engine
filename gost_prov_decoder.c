@@ -843,6 +843,8 @@ static int decoder_set_ctx_params(void *vctx, const OSSL_PARAM params[])
 {
     GOST_DECODER_CTX *ctx = vctx;
     const char *type = ctx->ispem ? "PEM" : "DER";
+    /* формат, заявленный при newctx */
+    const char *init_type = ctx->init_ispem_flag ? "PEM" : "DER";
     const char *structure = (ctx->selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0 ?
                             "PrivateKeyInfo" : "SubjectPublicKeyInfo";
     const char *init_structure = (ctx->init_selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0 ?
