@@ -9,6 +9,16 @@ engine, and is implemented like a wrapper around the engine code.
 provider.  When enabled, calls to the `DEBUG_LOG` macro will print
 messages on `stderr` during execution.
 
+When running the tests or any application that loads `gostprov`, make
+sure to point OpenSSL to the provider configuration and module
+directory.  Set `OPENSSL_CONF` to `./test/provider.cnf` and define
+`OPENSSL_MODULES` to the build output directory.  For example:
+
+```sh
+export OPENSSL_MODULES=$(pwd)/build/bin
+```
+
+
 ## Currently implemented
 
 Symmetric ciphers:
