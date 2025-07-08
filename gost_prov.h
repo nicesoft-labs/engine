@@ -28,6 +28,10 @@ struct provider_ctx_st {
 };
 typedef struct provider_ctx_st PROV_CTX;
 
+/* Register GOST algorithm OIDs */
+int gost_register_oids(void);
+
+
 #ifdef ENABLE_GOST_DEBUG
 # include <stdio.h>
 # define DEBUG_LOG(fmt, ...) do { \
