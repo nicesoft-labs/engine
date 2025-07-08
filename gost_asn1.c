@@ -335,5 +335,64 @@ GOST_PUBLIC_KEY_INFO *gost_pub_key_info_from_ec(const EC_KEY *ec,
     return NULL;
 }
 
+int gost_register_oids(void)
+{
+    /* Reuse the OID registration from the provider */
+    struct {
+        const char *oid;
+        const char *sn;
+        const char *ln;
+        int nid;
+    } oids[] = {
+        { "1.2.643.7.1.1.1.1", SN_id_GostR3410_2012_256,
+          "GOST R 34.10-2012 with 256-bit", NID_id_GostR3410_2012_256 },
+        { "1.2.643.7.1.1.1.2", SN_id_GostR3410_2012_512,
+          "GOST R 34.10-2012 with 512-bit", NID_id_GostR3410_2012_512 },
+        { "1.2.643.7.1.2.1.1.1", SN_id_tc26_gost_3410_2012_256_paramSetA,
+          LN_id_tc26_gost_3410_2012_256_paramSetA,
+          NID_id_tc26_gost_3410_2012_256_paramSetA },
+        { "1.2.643.7.1.2.1.1.2", SN_id_tc26_gost_3410_2012_256_paramSetB,
+          LN_id_tc26_gost_3410_2012_256_paramSetB,
+          NID_id_tc26_gost_3410_2012_256_paramSetB },
+        { "1.2.643.7.1.2.1.1.3", SN_id_tc26_gost_3410_2012_256_paramSetC,
+          LN_id_tc26_gost_3410_2012_256_paramSetC,
+          NID_id_tc26_gost_3410_2012_256_paramSetC },
+        { "1.2.643.7.1.2.1.1.4", SN_id_tc26_gost_3410_2012_256_paramSetD,
+          LN_id_tc26_gost_3410_2012_256_paramSetD,
+          NID_id_tc26_gost_3410_2012_256_paramSetD },
+        { "1.2.643.7.1.2.1.2.0", SN_id_tc26_gost_3410_2012_512_paramSetTest,
+          LN_id_tc26_gost_3410_2012_512_paramSetTest,
+          NID_id_tc26_gost_3410_2012_512_paramSetTest },
+        { "1.2.643.7.1.2.1.2.1", SN_id_tc26_gost_3410_2012_512_paramSetA,
+          LN_id_tc26_gost_3410_2012_512_paramSetA,
+          NID_id_tc26_gost_3410_2012_512_paramSetA },
+        { "1.2.643.7.1.2.1.2.2", SN_id_tc26_gost_3410_2012_512_paramSetB,
+          LN_id_tc26_gost_3410_2012_512_paramSetB,
+          NID_id_tc26_gost_3410_2012_512_paramSetB },
+        { "1.2.643.7.1.2.1.2.3", SN_id_tc26_gost_3410_2012_512_paramSetC,
+          LN_id_tc26_gost_3410_2012_512_paramSetC,
+          NID_id_tc26_gost_3410_2012_512_paramSetC },
+        { "1.2.643.7.1.1.2.2", SN_id_GostR3411_2012_256,
+          "GOST R 34.11-2012 with 256-bit", NID_id_GostR3411_2012_256 },
+        { "1.2.643.7.1.1.2.3", SN_id_GostR3411_2012_512,
+          "GOST R 34.11-2012 with 512-bit", NID_id_GostR3411_2012_512 }
+    };
+    size_t i;
+
+    for (i = 0; i < sizeof(oids)/sizeof(oids[0]); i++) {
+        int nid = OBJ_txt2nid(oids[i].oid);
+
+        if (nid == NID_undef) {
+            nid = OBJ_create(oids[i].oid, oids[i].sn, oids[i].ln);
+            ERR_clear_error();
+        } else {
+            ERR_clear_error();
+        }
+        if (nid != oids[i].nid)
+            return 0;
+    }
+    return 1;
+}
+
 
 
