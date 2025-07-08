@@ -223,9 +223,15 @@ int main(void)
             format = "DER";
             DBG("Creating decoder context: provider=gostprov, selection=%d, structure=%s, format=%s",
                 selection, structure, format);
-            dctx = OSSL_DECODER_CTX_new_for_pkey(&kder, format, structure,
-                                                "gost2012_256", selection, NULL,
-                                                "provider=gostprov");
+            dctx = OSSL_DECODER_CTX_new_for_pkey(&kder,
+                                    format,
+                                    structure,
+                                    "gost2012_256",
+                                    selection,
+                                    NULL,      // pw_cb
+                                    NULL,      // pw_cbarg
+                                    "provider=gostprov");  // propq
+
             T(dctx != NULL);
             DBG("Decoder context created: %p", (void *)dctx);
 
