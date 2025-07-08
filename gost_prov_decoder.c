@@ -78,7 +78,6 @@ static void *decoder_newctx(void *provctx, int expected_alg_nid, int ispem_flag)
     }
     ctx->provctx = provctx;
     ctx->expected_alg_nid = expected_alg_nid;
-    (void)ispem_flag; /* ispem_flag stored by wrapper */
     DEBUG_LOG(">>>> decoder_newctx: ctx=%p provctx=%p", ctx, provctx);
     return ctx;
 }
@@ -910,10 +909,11 @@ typedef void (*fptr_t)(void);
         GOST_DECODER_CTX *ctx = newctx_fn(provctx);                        \
         if (ctx != NULL) {                                                 \
             ctx->ispem = ispemflag;                                        \
+            ctx->init_ispem_flag = ispemflag;                               \
             ctx->selection = selflag;                                      \
             ctx->init_selection = selflag;                                 \
-            DEBUG_LOG(">>>> %s_%s_%s_decoder_newctx: Set ispem=%d selection=%d init_selection=%d", \
-                      #alg, #fmt, #suffix, ctx->ispem, ctx->selection, ctx->init_selection); \
+            DEBUG_LOG(">>>> %s_%s_%s_decoder_newctx: Set ispem=%d init_ispem_flag=%d selection=%d init_selection=%d", \
+                      #alg, #fmt, #suffix, ctx->ispem, ctx->init_ispem_flag, ctx->selection, ctx->init_selection); \
         }                                                                  \
         DEBUG_LOG(">>>> %s_%s_%s_decoder_newctx: Returning ctx=%p", #alg, #fmt, #suffix, ctx); \
         return ctx;                                                        \
