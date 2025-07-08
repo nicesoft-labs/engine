@@ -450,6 +450,8 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
         ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_DATA);
         goto end;
     }
+    /* Ensure all required GOST OIDs are registered */
+    gost_register_oids();
 
     if (selection != 0) {
         ctx->selection = selection;
