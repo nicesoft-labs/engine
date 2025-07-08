@@ -79,6 +79,8 @@ int main(void)
     gostprov = OSSL_PROVIDER_load(NULL, "gostprov");
     T(gostprov != NULL);
     DBG("Gostprov provider loaded: %p", (void *)gostprov);
+    /* Ensure GOST OIDs are registered for subsequent decoding */
+    gost_register_oids();
 
     DBG("Creating EVP_PKEY_CTX for algorithm gost2012_256");
     ctx = EVP_PKEY_CTX_new_from_name(NULL, "gost2012_256", NULL);
