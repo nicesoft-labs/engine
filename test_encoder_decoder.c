@@ -233,6 +233,23 @@ int main(void)
 
             T(dctx != NULL);
             DBG("Decoder context created: %p", (void *)dctx);
+            {
+                int num_decoders = OSSL_DECODER_CTX_get_num_decoders(dctx);
+                DBG("Number of decoders: %d", num_decoders);
+                if (num_decoders == 0) {
+                    fprintf(stderr, "WARNING: no decoders selected\n");
+                    goto err;
+                }
+#ifdef OSSL_DECODER_CTX_get_decoder
+                for (int i = 0; i < num_decoders; i++) {
+                    const OSSL_DECODER *dec = OSSL_DECODER_CTX_get_decoder(dctx, i);
+                    const char *dec_name = OSSL_DECODER_get0_name(dec);
+                    DBG("Decoder[%d]: %s", i, dec_name ? dec_name : "(null)");
+                }
+#else
+                DBG("Decoder name logging not supported with this OpenSSL version");
+#endif
+            }
 
             DBG("Decoding DER to EVP_PKEY");
             if (!OSSL_DECODER_from_data(dctx, &p, &der_len)) {
@@ -350,6 +367,23 @@ int main(void)
                                     "provider=gostprov");
             T(dctx != NULL);
             DBG("Decoder context created: %p", (void *)dctx);
+            {
+                int num_decoders = OSSL_DECODER_CTX_get_num_decoders(dctx);
+                DBG("Number of decoders: %d", num_decoders);
+                if (num_decoders == 0) {
+                    fprintf(stderr, "WARNING: no decoders selected\n");
+                    goto err;
+                }
+#ifdef OSSL_DECODER_CTX_get_decoder
+                for (int i = 0; i < num_decoders; i++) {
+                    const OSSL_DECODER *dec = OSSL_DECODER_CTX_get_decoder(dctx, i);
+                    const char *dec_name = OSSL_DECODER_get0_name(dec);
+                    DBG("Decoder[%d]: %s", i, dec_name ? dec_name : "(null)");
+                }
+#else
+                DBG("Decoder name logging not supported with this OpenSSL version");
+#endif
+            }
 
             DBG("Decoding PEM to EVP_PKEY");
             if (!OSSL_DECODER_from_data(dctx, &p, &pem_len)) {
