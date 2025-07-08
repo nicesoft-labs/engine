@@ -64,9 +64,10 @@ typedef struct {
     int ispem;        /* 0 = DER input, 1 = PEM input */
     int selection;    /* expected key selection */
     int init_selection; /* initial selection from newctx */
+    int expected_alg_nid; /* NID алгоритма, который этот декодер обязан принимать */
 } GOST_DECODER_CTX;
 
-static void *decoder_newctx(void *provctx)
+static void *decoder_newctx(void *provctx, int expected_alg_nid)
 {
     DEBUG_LOG(">>>> decoder_newctx: Creating new GOST_DECODER_CTX for provctx=%p", provctx);
     GOST_DECODER_CTX *ctx = OPENSSL_zalloc(sizeof(*ctx));
@@ -75,6 +76,7 @@ static void *decoder_newctx(void *provctx)
         return NULL;
     }
     ctx->provctx = provctx;
+    ctx->expected_alg_nid = expected_alg_nid;
     DEBUG_LOG(">>>> decoder_newctx: ctx=%p provctx=%p", ctx, provctx);
     return ctx;
 }
@@ -84,6 +86,59 @@ static void decoder_freectx(void *vctx)
     DEBUG_LOG(">>>> decoder_freectx: Freeing ctx=%p", vctx);
     OPENSSL_free(vctx);
 }
+
+/* Wrapper functions to specify expected algorithm NID for each decoder */
+static void *gost2001_der_priv_decoder_newctx_base(void *provctx)
+{
+    return decoder_newctx(provctx, NID_id_GostR3410_2001);
+}
+static void *gost2001_der_pub_decoder_newctx_base(void *provctx)
+{
+    return decoder_newctx(provctx, NID_id_GostR3410_2001);
+}
+static void *gost2001_pem_priv_decoder_newctx_base(void *provctx)
+{
+    return decoder_newctx(provctx, NID_id_GostR3410_2001);
+}
+static void *gost2001_pem_pub_decoder_newctx_base(void *provctx)
+{
+    return decoder_newctx(provctx, NID_id_GostR3410_2001);
+}
+
+static void *gost2012_256_der_priv_decoder_newctx_base(void *provctx)
+{
+    return decoder_newctx(provctx, NID_id_GostR3410_2012_256);
+}
+static void *gost2012_256_der_pub_decoder_newctx_base(void *provctx)
+{
+    return decoder_newctx(provctx, NID_id_GostR3410_2012_256);
+}
+static void *gost2012_256_pem_priv_decoder_newctx_base(void *provctx)
+{
+    return decoder_newctx(provctx, NID_id_GostR3410_2012_256);
+}
+static void *gost2012_256_pem_pub_decoder_newctx_base(void *provctx)
+{
+    return decoder_newctx(provctx, NID_id_GostR3410_2012_256);
+}
+
+static void *gost2012_512_der_priv_decoder_newctx_base(void *provctx)
+{
+    return decoder_newctx(provctx, NID_id_GostR3410_2012_512);
+}
+static void *gost2012_512_der_pub_decoder_newctx_base(void *provctx)
+{
+    return decoder_newctx(provctx, NID_id_GostR3410_2012_512);
+}
+static void *gost2012_512_pem_priv_decoder_newctx_base(void *provctx)
+{
+    return decoder_newctx(provctx, NID_id_GostR3410_2012_512);
+}
+static void *gost2012_512_pem_pub_decoder_newctx_base(void *provctx)
+{
+    return decoder_newctx(provctx, NID_id_GostR3410_2012_512);
+}
+
 
 /* Map parameter set NID to algorithm NID */
 static int param_to_alg_nid(int param_nid)
@@ -454,6 +509,10 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
         }
 
         if (priv != NULL && parse_algor(priv->algor, &alg_nid, &param_nid)) {
+            if (ctx->expected_alg_nid != NID_undef && alg_nid != ctx->expected_alg_nid) {
+                ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_DATA);
+                goto end;
+            }
             DEBUG_LOG(">>>> decoder_decode: parse_algor for PrivateKeyInfo succeeded, alg_nid=%d (%s) param_nid=%d (%s)",
                       alg_nid, OBJ_nid2sn(alg_nid), param_nid, OBJ_nid2sn(param_nid));
             int klen = priv->priv_key->length;
@@ -506,6 +565,10 @@ static int decoder_decode(void *vctx, OSSL_CORE_BIO *cin, int selection,
         DEBUG_LOG(">>>> decoder_decode: pub->algor=%p pub->pub_key=%p pub_key_len=%d",
                   pub->algor, pub->pub_key, pub->pub_key ? pub->pub_key->length : 0);
         int alg_ok = parse_algor(pub->algor, &alg_nid, &param_nid);
+        if (alg_ok && ctx->expected_alg_nid != NID_undef && alg_nid != ctx->expected_alg_nid) {
+            ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_DATA);
+            goto end;
+        }
         DEBUG_LOG(">>>> decoder_decode: parse_algor returned %d alg_nid=%d (%s) param_nid=%d (%s)",
                   alg_ok, alg_nid, OBJ_nid2sn(alg_nid), param_nid, OBJ_nid2sn(param_nid));
         if (alg_ok && pub->pub_key != NULL && pub->pub_key->length > 0) {
@@ -798,11 +861,11 @@ static const OSSL_PARAM *decoder_settable_ctx_params(void *provctx)
 
 typedef void (*fptr_t)(void);
 
-#define MAKE_DECODER_FUNCTIONS(alg, fmt, ispemflag, selflag, suffix)        \
+#define MAKE_DECODER_FUNCTIONS(alg, newctx_fn, fmt, ispemflag, selflag, suffix)        \
     static void *alg##_##fmt##_##suffix##_decoder_newctx(void *provctx)    \
     {                                                                      \
         DEBUG_LOG(">>>> %s_%s_%s_decoder_newctx: Starting with provctx=%p", #alg, #fmt, #suffix, provctx); \
-        GOST_DECODER_CTX *ctx = decoder_newctx(provctx);                   \
+        GOST_DECODER_CTX *ctx = newctx_fn(provctx);                        \
         if (ctx != NULL) {                                                 \
             ctx->ispem = ispemflag;                                        \
             ctx->selection = selflag;                                      \
@@ -842,20 +905,20 @@ typedef void (*fptr_t)(void);
         { 0, NULL }                                                        \
     }
 
-MAKE_DECODER_FUNCTIONS(gost2001, der, 0, OSSL_KEYMGMT_SELECT_PRIVATE_KEY, priv);
-MAKE_DECODER_FUNCTIONS(gost2001, pem, 1, OSSL_KEYMGMT_SELECT_PRIVATE_KEY, priv);
-MAKE_DECODER_FUNCTIONS(gost2001, der, 0, OSSL_KEYMGMT_SELECT_PUBLIC_KEY, pub);
-MAKE_DECODER_FUNCTIONS(gost2001, pem, 1, OSSL_KEYMGMT_SELECT_PUBLIC_KEY, pub);
+MAKE_DECODER_FUNCTIONS(gost2001, gost2001_der_priv_decoder_newctx_base, der, 0, OSSL_KEYMGMT_SELECT_PRIVATE_KEY, priv);
+MAKE_DECODER_FUNCTIONS(gost2001, gost2001_pem_priv_decoder_newctx_base, pem, 1, OSSL_KEYMGMT_SELECT_PRIVATE_KEY, priv);
+MAKE_DECODER_FUNCTIONS(gost2001, gost2001_der_pub_decoder_newctx_base, der, 0, OSSL_KEYMGMT_SELECT_PUBLIC_KEY, pub);
+MAKE_DECODER_FUNCTIONS(gost2001, gost2001_pem_pub_decoder_newctx_base, pem, 1, OSSL_KEYMGMT_SELECT_PUBLIC_KEY, pub);
 
-MAKE_DECODER_FUNCTIONS(gost2012_256, der, 0, OSSL_KEYMGMT_SELECT_PRIVATE_KEY, priv);
-MAKE_DECODER_FUNCTIONS(gost2012_256, pem, 1, OSSL_KEYMGMT_SELECT_PRIVATE_KEY, priv);
-MAKE_DECODER_FUNCTIONS(gost2012_256, der, 0, OSSL_KEYMGMT_SELECT_PUBLIC_KEY, pub);
-MAKE_DECODER_FUNCTIONS(gost2012_256, pem, 1, OSSL_KEYMGMT_SELECT_PUBLIC_KEY, pub);
+MAKE_DECODER_FUNCTIONS(gost2012_256, gost2012_256_der_priv_decoder_newctx_base, der, 0, OSSL_KEYMGMT_SELECT_PRIVATE_KEY, priv);
+MAKE_DECODER_FUNCTIONS(gost2012_256, gost2012_256_pem_priv_decoder_newctx_base, pem, 1, OSSL_KEYMGMT_SELECT_PRIVATE_KEY, priv);
+MAKE_DECODER_FUNCTIONS(gost2012_256, gost2012_256_der_pub_decoder_newctx_base, der, 0, OSSL_KEYMGMT_SELECT_PUBLIC_KEY, pub);
+MAKE_DECODER_FUNCTIONS(gost2012_256, gost2012_256_pem_pub_decoder_newctx_base, pem, 1, OSSL_KEYMGMT_SELECT_PUBLIC_KEY, pub);
 
-MAKE_DECODER_FUNCTIONS(gost2012_512, der, 0, OSSL_KEYMGMT_SELECT_PRIVATE_KEY, priv);
-MAKE_DECODER_FUNCTIONS(gost2012_512, pem, 1, OSSL_KEYMGMT_SELECT_PRIVATE_KEY, priv);
-MAKE_DECODER_FUNCTIONS(gost2012_512, der, 0, OSSL_KEYMGMT_SELECT_PUBLIC_KEY, pub);
-MAKE_DECODER_FUNCTIONS(gost2012_512, pem, 1, OSSL_KEYMGMT_SELECT_PUBLIC_KEY, pub);
+MAKE_DECODER_FUNCTIONS(gost2012_512, gost2012_512_der_priv_decoder_newctx_base, der, 0, OSSL_KEYMGMT_SELECT_PRIVATE_KEY, priv);
+MAKE_DECODER_FUNCTIONS(gost2012_512, gost2012_512_pem_priv_decoder_newctx_base, pem, 1, OSSL_KEYMGMT_SELECT_PRIVATE_KEY, priv);
+MAKE_DECODER_FUNCTIONS(gost2012_512, gost2012_512_der_pub_decoder_newctx_base, der, 0, OSSL_KEYMGMT_SELECT_PUBLIC_KEY, pub);
+MAKE_DECODER_FUNCTIONS(gost2012_512, gost2012_512_pem_pub_decoder_newctx_base, pem, 1, OSSL_KEYMGMT_SELECT_PUBLIC_KEY, pub);
 
 const OSSL_ALGORITHM GOST_prov_decoders[] = {
     { "gost2001", "provider=gostprov,input=DER,structure=PrivateKeyInfo", gost2001_der_priv_decoder_functions },
